@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { DocumentMeta } from '@/lib/types';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -8,6 +9,8 @@ export default function Home() {
   // File upload state
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [meta, setMeta] = useState<DocumentMeta | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Signature state
   const [isSignaturePlaced, setIsSignaturePlaced] = useState<boolean>(false);
@@ -19,24 +22,62 @@ export default function Home() {
   // Download state
   const [downloadReady, setDownloadReady] = useState<boolean>(false);
 
+  // Load existing document status on mount
+  useEffect(() => {
+    fetch('/api/meta')
+      .then(res => res.json())
+      .then((data: DocumentMeta) => {
+        setMeta(data);
+        // Update UI state based on existing document
+        if (data.status === 'uploaded') {
+          setUploadStatus('success');
+        }
+      })
+      .catch(error => {
+        console.error('Failed to load document status:', error);
+      });
+  }, []);
+
   // Event Handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.name.endsWith('.docx')) {
       setUploadedFile(file);
-      setUploadStatus('success');
+      setErrorMessage('');
     } else {
-      setUploadStatus('error');
+      setUploadedFile(null);
+      setErrorMessage('Only .docx files are allowed');
     }
   };
 
-  const handleUploadClick = () => {
-    if (uploadedFile) {
-      setUploadStatus('uploading');
-      // Simulate upload processing
-      setTimeout(() => {
-        setUploadStatus('success');
-      }, 1000);
+  const handleUploadClick = async () => {
+    if (!uploadedFile) return;
+
+    setUploadStatus('uploading');
+    setErrorMessage('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', uploadedFile);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+      }
+
+      const result = await response.json();
+      setUploadStatus('success');
+      setMeta(result.meta);
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadStatus('error');
+      setErrorMessage(error instanceof Error ? error.message : 'Upload failed');
     }
   };
 
@@ -115,6 +156,16 @@ export default function Home() {
               <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Error</span>
             )}
           </div>
+          {errorMessage && (
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+              {errorMessage}
+            </div>
+          )}
+          {meta && meta.status === 'uploaded' && meta.createdAt && (
+            <div className="text-xs text-gray-500">
+              Uploaded: {new Date(meta.createdAt).toLocaleString()}
+            </div>
+          )}
         </div>
       </section>
 
