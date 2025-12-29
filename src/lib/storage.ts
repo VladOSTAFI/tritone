@@ -7,6 +7,8 @@ export const DATA_DIR = path.join(process.cwd(), 'data');
 export const ACTIVE_DIR = path.join(DATA_DIR, 'active');
 export const META_PATH = path.join(ACTIVE_DIR, 'meta.json');
 export const DOCX_PATH = path.join(ACTIVE_DIR, 'original.docx');
+export const PREVIEW_PDF_PATH = path.join(ACTIVE_DIR, 'preview.pdf');
+export const SIGNED_PDF_PATH = path.join(ACTIVE_DIR, 'signed.pdf');
 
 /**
  * Ensures the active directory exists

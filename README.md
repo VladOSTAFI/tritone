@@ -1,26 +1,69 @@
 # Tritone
 
-A Next.js MVP project with TypeScript, TailwindCSS, ESLint, and Prettier.
+A Next.js document signing MVP with automatic DOCX to PDF conversion using LibreOffice.
+
+## Features
+
+- Upload DOCX files (max 15MB)
+- Automatic conversion to PDF using LibreOffice headless
+- Interactive signature placement
+- Download preview and signed PDFs
+- Single active document workflow
 
 ## Getting Started
 
-### Installation
+### Running with Docker (Recommended)
 
-Install dependencies:
+The easiest way to run Tritone with LibreOffice support:
+
+```bash
+docker-compose up --build
+```
+
+The app will be available at [http://localhost:3000](http://localhost:3000)
+
+Data is persisted in the `./data` directory.
+
+To stop the container:
+
+```bash
+docker-compose down
+```
+
+### Local Development (Alternative)
+
+**Prerequisites:**
+- Node.js 20+
+- pnpm
+- LibreOffice (must be in PATH)
+  - macOS: `brew install libreoffice`
+  - Ubuntu: `apt-get install libreoffice`
+  - Windows: Download from [libreoffice.org](https://www.libreoffice.org/)
+
+**Steps:**
+
+1. Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-### Development
-
-Run the development server:
+2. Run the development server:
 
 ```bash
 pnpm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## How It Works
+
+1. Upload a .docx file (max 15MB)
+2. Backend converts to PDF using LibreOffice (~5-60 seconds)
+3. Download preview PDF
+4. Place signature by clicking on document preview
+5. Sign the document with your name
+6. Download signed PDF
 
 ### Available Scripts
 

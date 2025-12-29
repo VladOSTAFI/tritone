@@ -29,7 +29,7 @@ export default function Home() {
       .then((data: DocumentMeta) => {
         setMeta(data);
         // Update UI state based on existing document
-        if (data.status === 'uploaded') {
+        if (data.status === 'uploaded' || data.status === 'converted') {
           setUploadStatus('success');
         }
       })
@@ -37,6 +37,29 @@ export default function Home() {
         console.error('Failed to load document status:', error);
       });
   }, []);
+
+  // Poll for conversion status when document is uploaded
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (meta?.status === 'uploaded') {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/meta');
+          const data = await res.json();
+          setMeta(data);
+
+          if (data.status !== 'uploaded') {
+            clearInterval(interval);
+          }
+        } catch (error) {
+          console.error('Failed to poll meta:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+
+    return () => clearInterval(interval);
+  }, [meta?.status]);
 
   // Event Handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +129,7 @@ export default function Home() {
   };
 
   const handleDownload = (type: 'preview' | 'signed') => {
-    console.log(`Downloading ${type} PDF...`);
+    window.open(`/api/download?type=${type}`, '_blank');
   };
 
   return (
@@ -149,10 +172,19 @@ export default function Home() {
             {uploadStatus === 'uploading' && (
               <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Uploading...</span>
             )}
-            {uploadStatus === 'success' && (
-              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Success</span>
+            {meta?.status === 'uploaded' && (
+              <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Converting to PDF...</span>
             )}
-            {uploadStatus === 'error' && (
+            {meta?.status === 'converted' && (
+              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Converted</span>
+            )}
+            {meta?.status === 'signed' && (
+              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Signed</span>
+            )}
+            {meta?.status === 'failed' && (
+              <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Failed</span>
+            )}
+            {uploadStatus === 'error' && !meta && (
               <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Error</span>
             )}
           </div>
@@ -161,7 +193,12 @@ export default function Home() {
               {errorMessage}
             </div>
           )}
-          {meta && meta.status === 'uploaded' && meta.createdAt && (
+          {meta?.status === 'failed' && meta.lastError && (
+            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+              {meta.lastError}
+            </div>
+          )}
+          {meta && (meta.status === 'uploaded' || meta.status === 'converted' || meta.status === 'signed') && meta.createdAt && (
             <div className="text-xs text-gray-500">
               Uploaded: {new Date(meta.createdAt).toLocaleString()}
             </div>
@@ -172,6 +209,17 @@ export default function Home() {
       {/* Section 2: Preview */}
       <section className="rounded-lg border border-gray-200 p-6 bg-white">
         <h2 className="text-xl font-semibold mb-4">2. Preview</h2>
+        {(meta?.status === 'converted' || meta?.status === 'signed') && (
+          <div className="mb-4">
+            <a
+              href="/api/download?type=preview"
+              download="preview.pdf"
+              className="inline-block text-blue-600 hover:text-blue-800 hover:underline text-sm font-medium"
+            >
+              Download Preview PDF
+            </a>
+          </div>
+        )}
         <div
           onClick={handlePreviewClick}
           className={`h-96 md:h-[600px] border-2 border-dashed border-gray-300 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center transition ${
@@ -244,30 +292,34 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleDownload('preview')}
-              disabled={!downloadReady}
+              disabled={meta?.status !== 'converted' && meta?.status !== 'signed'}
               className={`text-sm font-medium py-2 px-4 rounded-md transition ${
-                downloadReady
+                meta?.status === 'converted' || meta?.status === 'signed'
                   ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
               Download Preview PDF
             </button>
-            {!downloadReady && <span className="text-xs text-gray-500">(Complete signing first)</span>}
+            {meta?.status !== 'converted' && meta?.status !== 'signed' && (
+              <span className="text-xs text-gray-500">(Upload and convert a document first)</span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleDownload('signed')}
-              disabled={!downloadReady}
+              disabled={meta?.status !== 'signed'}
               className={`text-sm font-medium py-2 px-4 rounded-md transition ${
-                downloadReady
+                meta?.status === 'signed'
                   ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
               }`}
             >
               Download Signed PDF
             </button>
-            {!downloadReady && <span className="text-xs text-gray-500">(Complete signing first)</span>}
+            {meta?.status !== 'signed' && (
+              <span className="text-xs text-gray-500">(Complete signing first)</span>
+            )}
           </div>
         </div>
       </section>

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveOriginalDocx, writeMeta, readMeta } from '@/lib/storage';
+import { saveOriginalDocx, writeMeta, readMeta, ACTIVE_DIR } from '@/lib/storage';
+import { convertDocxToPdf } from '@/lib/pdf-converter';
 
 // Force Node.js runtime for filesystem access
 export const runtime = 'nodejs';
+export const maxDuration = 60; // Allow up to 60 seconds for conversion
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB in bytes
 
@@ -55,15 +57,18 @@ export async function POST(request: NextRequest) {
     // Save file to filesystem
     const savedPath = await saveOriginalDocx(buffer, file.name);
 
-    // Update meta.json
+    // Convert DOCX to PDF
+    const conversionResult = await convertDocxToPdf(savedPath, ACTIVE_DIR);
+
+    // Update meta.json based on conversion result
     const meta = {
-      status: 'uploaded' as const,
+      status: conversionResult.success ? ('converted' as const) : ('failed' as const),
       createdAt: new Date().toISOString(),
       originalDocxPath: savedPath,
-      previewPdfPath: null,
+      previewPdfPath: conversionResult.success ? conversionResult.pdfPath || null : null,
       signedPdfPath: null,
       signatureField: null,
-      lastError: null,
+      lastError: conversionResult.success ? null : (conversionResult.error || 'PDF conversion failed'),
     };
     await writeMeta(meta);
 
