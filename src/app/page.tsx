@@ -1,7 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import type { DocumentMeta } from '@/lib/types';
+import { useState, useEffect, useRef } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import SignatureCanvas from 'react-signature-canvas';
+import type { DocumentMeta, SignatureField } from '@/lib/types';
+
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -21,6 +29,23 @@ export default function Home() {
 
   // Download state
   const [downloadReady, setDownloadReady] = useState<boolean>(false);
+
+  // PDF preview state
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [isPdfLoading, setIsPdfLoading] = useState<boolean>(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+
+  // Signature field state (normalized coordinates)
+  const [signatureField, setSignatureField] = useState<SignatureField | null>(null);
+
+  // PDF page dimensions for overlay rendering
+  const [pageWidth, setPageWidth] = useState<number>(0);
+  const [pageHeight, setPageHeight] = useState<number>(0);
+
+  // Signature canvas ref
+  const signatureCanvasRef = useRef<SignatureCanvas | null>(null);
 
   // Load existing document status on mount
   useEffect(() => {
@@ -60,6 +85,61 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [meta?.status]);
+
+  // Fetch PDF as blob when document is converted or signed
+  useEffect(() => {
+    const fetchPdf = async () => {
+      if (meta?.status === 'converted' || meta?.status === 'signed') {
+        setIsPdfLoading(true);
+        setPdfError(null);
+
+        try {
+          const response = await fetch('/api/download?type=preview');
+          if (!response.ok) {
+            throw new Error(`Failed to load PDF: ${response.status}`);
+          }
+
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setPdfBlobUrl(url);
+        } catch (error) {
+          console.error('PDF fetch error:', error);
+          setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
+        } finally {
+          setIsPdfLoading(false);
+        }
+      } else {
+        // Reset PDF state if document status changes to non-converted
+        if (pdfBlobUrl) {
+          URL.revokeObjectURL(pdfBlobUrl);
+          setPdfBlobUrl(null);
+        }
+        setPdfError(null);
+        setPageNumber(1);
+        setNumPages(0);
+      }
+    };
+
+    fetchPdf();
+
+    // Cleanup: revoke blob URL when component unmounts or status changes
+    return () => {
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
+    };
+  }, [meta?.status]);
+
+  // Sync signatureField from meta
+  useEffect(() => {
+    if (meta?.signatureField) {
+      setSignatureField(meta.signatureField);
+      setIsSignaturePlaced(true);
+    } else {
+      setSignatureField(null);
+      setIsSignaturePlaced(false);
+    }
+  }, [meta?.signatureField]);
 
   // Event Handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,13 +184,51 @@ export default function Home() {
     }
   };
 
-  const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (uploadStatus === 'success') {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      setSignaturePosition({ x, y });
+  const handlePreviewClick = async (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only allow placement when document is converted
+    if (meta?.status !== 'converted') return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPx = e.clientX - rect.left;
+    const yPx = e.clientY - rect.top;
+
+    // Get rendered page canvas to extract dimensions
+    const pageElement = e.currentTarget.querySelector('.react-pdf__Page__canvas') as HTMLCanvasElement;
+    if (!pageElement) return;
+
+    const pageWidthPx = pageElement.width;
+    const pageHeightPx = pageElement.height;
+
+    // Calculate normalized coordinates (0-1)
+    const xN = xPx / pageWidthPx;
+    const yN = yPx / pageHeightPx;
+
+    // Fixed signature field size (from requirements)
+    const wN = 0.28;
+    const hN = 0.1;
+
+    const newField: SignatureField = { page: pageNumber, xN, yN, wN, hN };
+
+    // Save to backend
+    try {
+      const response = await fetch('/api/field', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newField),
+      });
+
+      if (!response.ok) throw new Error('Failed to save signature field');
+
+      const data = await response.json();
+      setMeta(data.meta);
+      setSignatureField(newField);
       setIsSignaturePlaced(true);
+      setPageWidth(pageWidthPx);
+      setPageHeight(pageHeightPx);
+      setSignaturePosition({ x: xPx, y: yPx });
+    } catch (error) {
+      console.error('Failed to place signature field:', error);
+      setErrorMessage('Failed to place signature field');
     }
   };
 
@@ -126,6 +244,41 @@ export default function Home() {
   const handleModalClose = () => {
     setIsSigningModalOpen(false);
     setDownloadReady(true);
+  };
+
+  const handleSaveSignature = async () => {
+    if (!signatureCanvasRef.current) return;
+
+    // Check if canvas is empty
+    if (signatureCanvasRef.current.isEmpty()) {
+      setErrorMessage('Please draw your signature first');
+      return;
+    }
+
+    // Get signature as PNG data URL
+    const signatureDataUrl = signatureCanvasRef.current.toDataURL('image/png');
+
+    try {
+      const response = await fetch('/api/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signatureDataUrl }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to sign document');
+      }
+
+      const data = await response.json();
+      setMeta(data.meta);
+      setIsSigningModalOpen(false);
+      setDownloadReady(true);
+      setErrorMessage('');
+    } catch (error) {
+      console.error('Signing error:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to sign document');
+    }
   };
 
   const handleDownload = (type: 'preview' | 'signed') => {
@@ -220,27 +373,94 @@ export default function Home() {
             </a>
           </div>
         )}
-        <div
-          onClick={handlePreviewClick}
-          className={`h-96 md:h-[600px] border-2 border-dashed border-gray-300 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center transition ${
-            uploadStatus === 'success' ? 'cursor-pointer hover:bg-gray-300' : 'cursor-not-allowed'
-          }`}
-        >
-          <div className="text-center">
-            {uploadStatus !== 'success' ? (
-              <p className="text-gray-500">Upload a document to preview</p>
-            ) : (
-              <div>
-                <p className="text-gray-600 font-medium mb-2">Document Preview Placeholder</p>
-                <p className="text-sm text-gray-500">Click anywhere to place signature</p>
+        <div className="space-y-4">
+          <div
+            className={`h-96 md:h-[600px] border-2 ${
+              pdfBlobUrl ? 'border-solid border-gray-300' : 'border-dashed border-gray-300'
+            } rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center transition overflow-auto`}
+          >
+            {isPdfLoading ? (
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                <p className="text-gray-600">Loading PDF...</p>
+              </div>
+            ) : pdfError ? (
+              <div className="text-center p-4">
+                <p className="text-red-600 mb-2">Failed to load PDF</p>
+                <p className="text-sm text-gray-500">{pdfError}</p>
+              </div>
+            ) : pdfBlobUrl ? (
+              <div onClick={handlePreviewClick} className="cursor-pointer relative">
+                <Document
+                  file={pdfBlobUrl}
+                  onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                  onLoadError={(error) => setPdfError(error.message)}
+                  loading={
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                      <p className="text-gray-600">Rendering PDF...</p>
+                    </div>
+                  }
+                >
+                  <Page
+                    pageNumber={pageNumber}
+                    renderTextLayer={true}
+                    renderAnnotationLayer={true}
+                    className="shadow-lg"
+                  />
+                </Document>
+                {/* Signature field overlay - only show on matching page */}
+                {signatureField && pageNumber === signatureField.page && pageWidth > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${(signatureField.xN - signatureField.wN / 2) * pageWidth}px`,
+                      top: `${(signatureField.yN - signatureField.hN / 2) * pageHeight}px`,
+                      width: `${signatureField.wN * pageWidth}px`,
+                      height: `${signatureField.hN * pageHeight}px`,
+                      border: '2px dashed #3B82F6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      pointerEvents: 'none',
+                      borderRadius: '4px',
+                      zIndex: 10,
+                    }}
+                  />
+                )}
                 {isSignaturePlaced && signaturePosition && (
-                  <div className="mt-4 text-xs text-gray-500">
+                  <div className="mt-4 text-center text-xs text-gray-500">
                     Signature placed at ({Math.round(signaturePosition.x)}, {Math.round(signaturePosition.y)})
                   </div>
                 )}
               </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-500">Upload a document to preview</p>
+              </div>
             )}
           </div>
+
+          {/* Page Navigation */}
+          {pdfBlobUrl && numPages > 1 && (
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={() => setPageNumber(Math.max(1, pageNumber - 1))}
+                disabled={pageNumber <= 1}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm font-medium"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-gray-600">
+                Page {pageNumber} of {numPages}
+              </span>
+              <button
+                onClick={() => setPageNumber(Math.min(numPages, pageNumber + 1))}
+                disabled={pageNumber >= numPages}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm font-medium"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -278,7 +498,7 @@ export default function Home() {
         <h2 className="text-xl font-semibold mb-4">4. Sign Document</h2>
         <button
           onClick={handleSignClick}
-          disabled={!isSignaturePlaced}
+          disabled={!(meta?.status === 'converted' && signatureField !== null)}
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
           Sign Document
@@ -329,38 +549,43 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold">Sign Document</h3>
+              <h3 className="text-xl font-semibold">Draw Your Signature</h3>
               <button
-                onClick={handleModalClose}
+                onClick={() => setIsSigningModalOpen(false)}
                 className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
               >
                 &times;
               </button>
             </div>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
-                <input
-                  type="text"
-                  placeholder="Enter your name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              {/* Signature Canvas */}
+              <div className="border-2 border-gray-300 rounded-md">
+                <SignatureCanvas
+                  ref={signatureCanvasRef}
+                  canvasProps={{
+                    width: 400,
+                    height: 200,
+                    className: 'signature-canvas',
+                  }}
+                  backgroundColor="rgb(255, 255, 255)"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Timestamp</label>
-                <input
-                  type="text"
-                  value={new Date().toLocaleString()}
-                  readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-                />
+
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => signatureCanvasRef.current?.clear()}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md transition"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={handleSaveSignature}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition"
+                >
+                  Save & Sign
+                </button>
               </div>
-              <button
-                onClick={handleModalClose}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition"
-              >
-                Complete Signature
-              </button>
             </div>
           </div>
         </div>
