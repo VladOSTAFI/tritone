@@ -26,7 +26,9 @@ export async function stampSignatureOnPdf(
     const pageIndex = field.page - 1;
 
     if (pageIndex < 0 || pageIndex >= pages.length) {
-      throw new Error(`Invalid page number: ${field.page}. PDF has ${pages.length} pages.`);
+      throw new Error(
+        `Invalid page number: ${field.page}. PDF has ${pages.length} pages.`
+      );
     }
 
     const page = pages[pageIndex];
@@ -61,7 +63,9 @@ export async function stampSignatureOnPdf(
   } catch (error) {
     console.error('Error stamping signature on PDF:', error);
     throw new Error(
-      error instanceof Error ? `PDF stamping failed: ${error.message}` : 'Failed to stamp signature on PDF'
+      error instanceof Error
+        ? `PDF stamping failed: ${error.message}`
+        : 'Failed to stamp signature on PDF'
     );
   }
 }
@@ -73,7 +77,10 @@ export async function stampSignatureOnPdf(
  * @param dataUrl - Data URL of the signature image
  * @returns The embedded image object
  */
-async function embedSignatureImage(pdfDoc: PDFDocument, dataUrl: string): Promise<any> {
+async function embedSignatureImage(
+  pdfDoc: PDFDocument,
+  dataUrl: string
+): Promise<any> {
   try {
     // Extract base64 data from data URL
     // Format: data:image/png;base64,iVBORw0KG...
@@ -94,7 +101,9 @@ async function embedSignatureImage(pdfDoc: PDFDocument, dataUrl: string): Promis
   } catch (error) {
     console.error('Error embedding signature image:', error);
     throw new Error(
-      error instanceof Error ? `Failed to embed signature image: ${error.message}` : 'Failed to embed signature image'
+      error instanceof Error
+        ? `Failed to embed signature image: ${error.message}`
+        : 'Failed to embed signature image'
     );
   }
 }

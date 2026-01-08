@@ -1,11 +1,16 @@
-export type DocumentStatus = 'empty' | 'uploaded' | 'converted' | 'signed' | 'failed';
+export type DocumentStatus =
+  | 'empty'
+  | 'uploaded'
+  | 'converted'
+  | 'signed'
+  | 'failed';
 
 export interface SignatureField {
   page: number;
-  xN: number;  // Normalized x position (0-1)
-  yN: number;  // Normalized y position (0-1)
-  wN: number;  // Normalized width (0-1)
-  hN: number;  // Normalized height (0-1)
+  xN: number; // Normalized x position (0-1)
+  yN: number; // Normalized y position (0-1)
+  wN: number; // Normalized width (0-1)
+  hN: number; // Normalized height (0-1)
 }
 
 export interface DocumentMeta {

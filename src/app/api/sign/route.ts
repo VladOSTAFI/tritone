@@ -15,12 +15,18 @@ export async function POST(request: NextRequest) {
 
     // Validation: signatureDataUrl required
     if (!signatureDataUrl || typeof signatureDataUrl !== 'string') {
-      return NextResponse.json({ error: 'signatureDataUrl is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'signatureDataUrl is required' },
+        { status: 400 }
+      );
     }
 
     // Validation: Must be a valid data URL
     if (!signatureDataUrl.startsWith('data:image/png;base64,')) {
-      return NextResponse.json({ error: 'signatureDataUrl must be a PNG data URL' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'signatureDataUrl must be a PNG data URL' },
+        { status: 400 }
+      );
     }
 
     // Read current meta
@@ -29,7 +35,10 @@ export async function POST(request: NextRequest) {
     // Validation: Preview PDF must exist
     if (!meta.previewPdfPath) {
       return NextResponse.json(
-        { error: 'Preview PDF not found. Please upload and convert a document first.' },
+        {
+          error:
+            'Preview PDF not found. Please upload and convert a document first.',
+        },
         { status: 400 }
       );
     }
@@ -37,30 +46,49 @@ export async function POST(request: NextRequest) {
     // Validation: Signature field must be placed
     if (!meta.signatureField) {
       return NextResponse.json(
-        { error: 'Signature field not placed. Please place signature field first.' },
+        {
+          error:
+            'Signature field not placed. Please place signature field first.',
+        },
         { status: 400 }
       );
     }
 
     // Validation: Document must be converted
     if (meta.status !== 'converted') {
-      return NextResponse.json({ error: 'Document must be in converted state to sign' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Document must be in converted state to sign' },
+        { status: 400 }
+      );
     }
 
     // Verify preview PDF exists on disk
     try {
       await fs.access(meta.previewPdfPath);
     } catch {
-      return NextResponse.json({ error: 'Preview PDF file not found on disk' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Preview PDF file not found on disk' },
+        { status: 500 }
+      );
     }
 
     // Stamp signature onto PDF
     try {
-      await stampSignatureOnPdf(meta.previewPdfPath, SIGNED_PDF_PATH, signatureDataUrl, meta.signatureField);
+      await stampSignatureOnPdf(
+        meta.previewPdfPath,
+        SIGNED_PDF_PATH,
+        signatureDataUrl,
+        meta.signatureField
+      );
     } catch (stampError) {
       console.error('PDF stamping error:', stampError);
       return NextResponse.json(
-        { error: stampError instanceof Error ? stampError.message : 'Failed to stamp signature on PDF' },
+        {
+          error:
+            stampError instanceof Error
+              ? stampError.message
+              : 'Failed to stamp signature on PDF',
+        },
         { status: 500 }
       );
     }
@@ -93,6 +121,9 @@ export async function POST(request: NextRequest) {
       console.error('Failed to update meta with error:', metaError);
     }
 
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Signing failed' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Signing failed' },
+      { status: 500 }
+    );
   }
 }

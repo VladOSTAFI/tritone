@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Tritone',
-  description: 'Document signing application with automatic DOCX to PDF conversion',
+  description:
+    'Document signing application with automatic DOCX to PDF conversion',
 };
 
 export default function RootLayout({

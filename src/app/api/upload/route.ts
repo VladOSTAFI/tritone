@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveOriginalDocx, writeMeta, readMeta, ACTIVE_DIR } from '@/lib/storage';
+import {
+  saveOriginalDocx,
+  writeMeta,
+  readMeta,
+  ACTIVE_DIR,
+} from '@/lib/storage';
 import { convertDocxToPdf } from '@/lib/pdf-converter';
 
 // Force Node.js runtime for filesystem access
@@ -20,10 +25,7 @@ export async function POST(request: NextRequest) {
 
     // Validation: File exists
     if (!file) {
-      return NextResponse.json(
-        { error: 'No file provided' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
     // Validation: File extension
@@ -44,10 +46,7 @@ export async function POST(request: NextRequest) {
 
     // Validation: MIME type
     if (!VALID_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Invalid file type' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
     }
 
     // Convert File to Buffer
@@ -62,13 +61,19 @@ export async function POST(request: NextRequest) {
 
     // Update meta.json based on conversion result
     const meta = {
-      status: conversionResult.success ? ('converted' as const) : ('failed' as const),
+      status: conversionResult.success
+        ? ('converted' as const)
+        : ('failed' as const),
       createdAt: new Date().toISOString(),
       originalDocxPath: savedPath,
-      previewPdfPath: conversionResult.success ? conversionResult.pdfPath || null : null,
+      previewPdfPath: conversionResult.success
+        ? conversionResult.pdfPath || null
+        : null,
       signedPdfPath: null,
       signatureField: null,
-      lastError: conversionResult.success ? null : (conversionResult.error || 'PDF conversion failed'),
+      lastError: conversionResult.success
+        ? null
+        : conversionResult.error || 'PDF conversion failed',
     };
     await writeMeta(meta);
 
@@ -77,7 +82,6 @@ export async function POST(request: NextRequest) {
       message: 'File uploaded successfully',
       meta,
     });
-
   } catch (error) {
     console.error('Upload error:', error);
 

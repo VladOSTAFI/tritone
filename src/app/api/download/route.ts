@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
     const meta = await readMeta();
 
     // Get the appropriate PDF path based on type
-    const pdfPath = type === 'preview' ? meta.previewPdfPath : meta.signedPdfPath;
+    const pdfPath =
+      type === 'preview' ? meta.previewPdfPath : meta.signedPdfPath;
 
     if (!pdfPath) {
       const message =

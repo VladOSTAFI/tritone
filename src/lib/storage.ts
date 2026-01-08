@@ -61,7 +61,10 @@ export async function writeMeta(meta: DocumentMeta): Promise<void> {
  * Saves the uploaded DOCX file
  * Overwrites existing file (only one active document)
  */
-export async function saveOriginalDocx(fileBuffer: Buffer, originalName: string): Promise<string> {
+export async function saveOriginalDocx(
+  fileBuffer: Buffer,
+  originalName: string
+): Promise<string> {
   try {
     await ensureActiveDir();
 
@@ -94,7 +97,7 @@ export async function clearActiveDocument(): Promise<void> {
     // Remove files
     const files = ['original.docx', 'preview.pdf', 'signed.pdf'];
     await Promise.all(
-      files.map(file =>
+      files.map((file) =>
         fs.unlink(path.join(ACTIVE_DIR, file)).catch(() => {})
       )
     );

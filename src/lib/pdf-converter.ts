@@ -149,7 +149,8 @@ async function callConversionService(
 function parseServiceError(errorCode: string): string {
   const errorMap: Record<string, string> = {
     MISSING_FILE: 'File upload failed. Please try again.',
-    INVALID_FILE_TYPE: 'Invalid document format. Only .docx files are supported.',
+    INVALID_FILE_TYPE:
+      'Invalid document format. Only .docx files are supported.',
     FILE_TOO_LARGE: 'File too large. Maximum size is 15MB.',
     CONVERSION_TIMEOUT:
       'PDF conversion timed out. The document may be too complex or large.',

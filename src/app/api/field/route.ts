@@ -20,19 +20,37 @@ export async function POST(request: NextRequest) {
       typeof hN !== 'number'
     ) {
       return NextResponse.json(
-        { error: 'Invalid signature field data. All fields (page, xN, yN, wN, hN) are required.' },
+        {
+          error:
+            'Invalid signature field data. All fields (page, xN, yN, wN, hN) are required.',
+        },
         { status: 400 }
       );
     }
 
     // Validation: Normalized coordinates must be 0-1
-    if (xN < 0 || xN > 1 || yN < 0 || yN > 1 || wN <= 0 || wN > 1 || hN <= 0 || hN > 1) {
-      return NextResponse.json({ error: 'Normalized coordinates must be between 0 and 1' }, { status: 400 });
+    if (
+      xN < 0 ||
+      xN > 1 ||
+      yN < 0 ||
+      yN > 1 ||
+      wN <= 0 ||
+      wN > 1 ||
+      hN <= 0 ||
+      hN > 1
+    ) {
+      return NextResponse.json(
+        { error: 'Normalized coordinates must be between 0 and 1' },
+        { status: 400 }
+      );
     }
 
     // Validation: Page must be positive integer
     if (page < 1 || !Number.isInteger(page)) {
-      return NextResponse.json({ error: 'Page number must be a positive integer' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Page number must be a positive integer' },
+        { status: 400 }
+      );
     }
 
     // Read current meta
@@ -61,7 +79,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Field placement error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to save signature field' },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to save signature field',
+      },
       { status: 500 }
     );
   }
