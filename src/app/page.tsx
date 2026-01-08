@@ -47,6 +47,15 @@ export default function Home() {
   // Signature canvas ref
   const signatureCanvasRef = useRef<SignatureCanvas | null>(null);
 
+  // Resize state
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
+  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; field: SignatureField } | null>(null);
+
+  // Drag state
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; field: SignatureField } | null>(null);
+
   // Load existing document status on mount
   useEffect(() => {
     fetch('/api/meta')
@@ -185,6 +194,9 @@ export default function Home() {
   };
 
   const handlePreviewClick = async (e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't place new field if resizing or dragging
+    if (isResizing || isDragging) return;
+
     // Only allow placement when document is converted
     if (meta?.status !== 'converted') return;
 
@@ -283,6 +295,160 @@ export default function Home() {
 
   const handleDownload = (type: 'preview' | 'signed') => {
     window.open(`/api/download?type=${type}`, '_blank');
+  };
+
+  const handleResizeStart = (e: React.MouseEvent, handle: string) => {
+    e.stopPropagation();
+    if (!signatureField) return;
+
+    setIsResizing(true);
+    setResizeHandle(handle);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      field: { ...signatureField },
+    });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    // Handle resize
+    if (isResizing && resizeStart && signatureField && resizeHandle) {
+      const deltaXPx = e.clientX - resizeStart.x;
+      const deltaYPx = e.clientY - resizeStart.y;
+
+      // Convert pixel deltas to normalized deltas
+      const deltaXN = deltaXPx / pageWidth;
+      const deltaYN = deltaYPx / pageHeight;
+
+      let newField = { ...resizeStart.field };
+
+      // Handle different resize corners
+      switch (resizeHandle) {
+        case 'top-left':
+          newField.xN = resizeStart.field.xN + deltaXN;
+          newField.yN = resizeStart.field.yN + deltaYN;
+          newField.wN = resizeStart.field.wN - deltaXN;
+          newField.hN = resizeStart.field.hN - deltaYN;
+          break;
+        case 'top-right':
+          newField.yN = resizeStart.field.yN + deltaYN;
+          newField.wN = resizeStart.field.wN + deltaXN;
+          newField.hN = resizeStart.field.hN - deltaYN;
+          break;
+        case 'bottom-left':
+          newField.xN = resizeStart.field.xN + deltaXN;
+          newField.wN = resizeStart.field.wN - deltaXN;
+          newField.hN = resizeStart.field.hN + deltaYN;
+          break;
+        case 'bottom-right':
+          newField.wN = resizeStart.field.wN + deltaXN;
+          newField.hN = resizeStart.field.hN + deltaYN;
+          break;
+      }
+
+      // Enforce minimum size (5% of page dimensions)
+      const minSize = 0.05;
+      if (newField.wN < minSize) newField.wN = minSize;
+      if (newField.hN < minSize) newField.hN = minSize;
+
+      // Enforce boundaries (keep within page)
+      if (newField.xN - newField.wN / 2 < 0) newField.xN = newField.wN / 2;
+      if (newField.xN + newField.wN / 2 > 1) newField.xN = 1 - newField.wN / 2;
+      if (newField.yN - newField.hN / 2 < 0) newField.yN = newField.hN / 2;
+      if (newField.yN + newField.hN / 2 > 1) newField.yN = 1 - newField.hN / 2;
+
+      setSignatureField(newField);
+    }
+
+    // Handle drag
+    if (isDragging && dragStart && signatureField) {
+      const deltaXPx = e.clientX - dragStart.x;
+      const deltaYPx = e.clientY - dragStart.y;
+
+      // Convert to normalized coordinates
+      const deltaXN = deltaXPx / pageWidth;
+      const deltaYN = deltaYPx / pageHeight;
+
+      // Calculate new center position
+      let newXN = dragStart.field.xN + deltaXN;
+      let newYN = dragStart.field.yN + deltaYN;
+
+      // Enforce boundaries - keep entire field within page
+      const halfW = signatureField.wN / 2;
+      const halfH = signatureField.hN / 2;
+
+      if (newXN - halfW < 0) newXN = halfW;
+      if (newXN + halfW > 1) newXN = 1 - halfW;
+      if (newYN - halfH < 0) newYN = halfH;
+      if (newYN + halfH > 1) newYN = 1 - halfH;
+
+      setSignatureField({
+        ...signatureField,
+        xN: newXN,
+        yN: newYN,
+      });
+    }
+  };
+
+  const handleMouseUp = async () => {
+    // Handle resize end
+    if (isResizing && signatureField) {
+      setIsResizing(false);
+      setResizeHandle(null);
+      setResizeStart(null);
+
+      // Save the new dimensions to backend
+      try {
+        const response = await fetch('/api/field', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(signatureField),
+        });
+
+        if (!response.ok) throw new Error('Failed to update signature field');
+
+        const data = await response.json();
+        setMeta(data.meta);
+      } catch (error) {
+        console.error('Failed to update signature field:', error);
+        setErrorMessage('Failed to update signature field');
+      }
+    }
+
+    // Handle drag end
+    if (isDragging && signatureField) {
+      setIsDragging(false);
+      setDragStart(null);
+
+      // Save to backend
+      try {
+        const response = await fetch('/api/field', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(signatureField),
+        });
+
+        if (!response.ok) throw new Error('Failed to update signature field');
+
+        const data = await response.json();
+        setMeta(data.meta);
+      } catch (error) {
+        console.error('Failed to update signature field:', error);
+        setErrorMessage('Failed to update signature field');
+      }
+    }
+  };
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent field placement
+    if (!signatureField) return;
+
+    setIsDragging(true);
+    setDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      field: { ...signatureField },
+    });
   };
 
   return (
@@ -390,7 +556,12 @@ export default function Home() {
                 <p className="text-sm text-gray-500">{pdfError}</p>
               </div>
             ) : pdfBlobUrl ? (
-              <div onClick={handlePreviewClick} className="cursor-pointer relative">
+              <div
+                onClick={handlePreviewClick}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                className="cursor-pointer relative"
+              >
                 <Document
                   file={pdfBlobUrl}
                   onLoadSuccess={({ numPages }) => setNumPages(numPages)}
@@ -412,6 +583,7 @@ export default function Home() {
                 {/* Signature field overlay - only show on matching page */}
                 {signatureField && pageNumber === signatureField.page && pageWidth > 0 && (
                   <div
+                    onMouseDown={handleDragStart}
                     style={{
                       position: 'absolute',
                       left: `${(signatureField.xN - signatureField.wN / 2) * pageWidth}px`,
@@ -420,11 +592,33 @@ export default function Home() {
                       height: `${signatureField.hN * pageHeight}px`,
                       border: '2px dashed #3B82F6',
                       backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                      pointerEvents: 'none',
+                      pointerEvents: 'auto',
                       borderRadius: '4px',
                       zIndex: 10,
+                      cursor: isDragging ? 'grabbing' : 'grab',
                     }}
-                  />
+                  >
+                    {/* Resize handles */}
+                    {['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((handle) => (
+                      <div
+                        key={handle}
+                        onMouseDown={(e) => handleResizeStart(e, handle)}
+                        style={{
+                          position: 'absolute',
+                          width: '12px',
+                          height: '12px',
+                          backgroundColor: '#3B82F6',
+                          border: '2px solid white',
+                          borderRadius: '50%',
+                          cursor: `${handle.includes('top') ? 'n' : 's'}${handle.includes('left') ? 'w' : 'e'}-resize`,
+                          ...(handle === 'top-left' && { top: '-6px', left: '-6px' }),
+                          ...(handle === 'top-right' && { top: '-6px', right: '-6px' }),
+                          ...(handle === 'bottom-left' && { bottom: '-6px', left: '-6px' }),
+                          ...(handle === 'bottom-right' && { bottom: '-6px', right: '-6px' }),
+                        }}
+                      />
+                    ))}
+                  </div>
                 )}
                 {isSignaturePlaced && signaturePosition && (
                   <div className="mt-4 text-center text-xs text-gray-500">

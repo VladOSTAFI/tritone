@@ -1,44 +1,20 @@
 # Tritone
 
-A Next.js document signing MVP with automatic DOCX to PDF conversion using LibreOffice.
+A Next.js document signing MVP with automatic DOCX to PDF conversion using external conversion service.
 
 ## Features
 
 - Upload DOCX files (max 15MB)
-- Automatic conversion to PDF using LibreOffice headless
+- Automatic conversion to PDF using external conversion service
 - Interactive signature placement
 - Download preview and signed PDFs
 - Single active document workflow
 
 ## Getting Started
 
-### Running with Docker (Recommended)
-
-The easiest way to run Tritone with LibreOffice support:
-
-```bash
-docker-compose up --build
-```
-
-The app will be available at [http://localhost:3000](http://localhost:3000)
-
-Data is persisted in the `./data` directory.
-
-To stop the container:
-
-```bash
-docker-compose down
-```
-
-### Local Development (Alternative)
-
 **Prerequisites:**
 - Node.js 20+
 - pnpm
-- LibreOffice (must be in PATH)
-  - macOS: `brew install libreoffice`
-  - Ubuntu: `apt-get install libreoffice`
-  - Windows: Download from [libreoffice.org](https://www.libreoffice.org/)
 
 **Steps:**
 
@@ -48,7 +24,15 @@ docker-compose down
 pnpm install
 ```
 
-2. Run the development server:
+2. (Optional) Configure environment variables:
+
+Create a `.env.local` file if you need to customize the conversion service URL:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Run the development server:
 
 ```bash
 pnpm run dev
@@ -56,10 +40,17 @@ pnpm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Environment Variables
+
+Optional configuration via `.env.local`:
+
+- `CONVERSION_SERVICE_URL` - URL of document conversion service (default: production GCP service)
+- `PDF_CONVERSION_TIMEOUT_MS` - Timeout in milliseconds (default: 60000)
+
 ## How It Works
 
 1. Upload a .docx file (max 15MB)
-2. Backend converts to PDF using LibreOffice (~5-60 seconds)
+2. Backend converts to PDF via external service (~1-5 seconds)
 3. Download preview PDF
 4. Place signature by clicking on document preview
 5. Sign the document with your name

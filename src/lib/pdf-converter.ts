@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -12,8 +11,24 @@ const CONVERSION_TIMEOUT_MS = parseInt(
   process.env.PDF_CONVERSION_TIMEOUT_MS || '60000'
 );
 
+const CONVERSION_SERVICE_URL =
+  process.env.CONVERSION_SERVICE_URL ||
+  'https://docx-to-pdf-service-146273646876.europe-west1.run.app/convert';
+
+interface ServiceResponse {
+  success: boolean;
+  data?: {
+    pdf: string; // base64 encoded
+    originalFilename: string;
+    fileSize: number;
+    conversionTimeMs: number;
+  };
+  error?: string;
+  code?: string;
+}
+
 /**
- * Converts a DOCX file to PDF using LibreOffice headless
+ * Converts a DOCX file to PDF using external conversion service
  * @param docxPath - Full path to the DOCX file
  * @param activeDir - Directory where the PDF should be output
  * @returns ConversionResult with success status and PDF path or error message
@@ -23,28 +38,24 @@ export async function convertDocxToPdf(
   activeDir: string
 ): Promise<ConversionResult> {
   try {
-    // Execute LibreOffice conversion
-    await executeLibreOfficeCommand(docxPath, activeDir, CONVERSION_TIMEOUT_MS);
+    // 1. Read DOCX file into buffer
+    const fileBuffer = await fs.readFile(docxPath);
+    const filename = path.basename(docxPath);
 
-    // Check if output file was created (LibreOffice names it original.pdf)
-    const outputPath = path.join(activeDir, 'original.pdf');
-    const previewPath = path.join(activeDir, 'preview.pdf');
+    // 2. Call external conversion service
+    const serviceResponse = await callConversionService(
+      fileBuffer,
+      filename,
+      CONVERSION_TIMEOUT_MS
+    );
 
-    try {
-      await fs.access(outputPath);
-    } catch {
-      return {
-        success: false,
-        error: 'PDF file was not created. Conversion may have failed silently.',
-      };
-    }
-
-    // Rename to preview.pdf for clarity
-    await fs.rename(outputPath, previewPath);
+    // 3. Write PDF directly to preview.pdf
+    const outputPath = path.join(activeDir, 'preview.pdf');
+    await writeBase64ToPdf(serviceResponse.pdf, outputPath);
 
     return {
       success: true,
-      pdfPath: previewPath,
+      pdfPath: outputPath,
     };
   } catch (error) {
     if (error instanceof Error) {
@@ -61,121 +72,128 @@ export async function convertDocxToPdf(
 }
 
 /**
- * Executes LibreOffice command with timeout
- * @param docxPath - Full path to the DOCX file
- * @param outDir - Output directory for the PDF
+ * Calls the external conversion service with the DOCX file
+ * @param fileBuffer - Buffer containing the DOCX file data
+ * @param filename - Original filename
  * @param timeoutMs - Timeout in milliseconds
+ * @returns Service response data with base64 PDF
  */
-function executeLibreOfficeCommand(
-  docxPath: string,
-  outDir: string,
+async function callConversionService(
+  fileBuffer: Buffer,
+  filename: string,
   timeoutMs: number
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const args = [
-      '--headless',
-      '--convert-to',
-      'pdf',
-      '--outdir',
-      outDir,
-      docxPath,
-    ];
-
-    const process = spawn('libreoffice', args);
-
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-
-    // Set timeout
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      process.kill('SIGTERM');
-
-      // Force kill if it doesn't respond to SIGTERM
-      setTimeout(() => {
-        if (!process.killed) {
-          process.kill('SIGKILL');
-        }
-      }, 5000);
-    }, timeoutMs);
-
-    // Collect stdout
-    process.stdout?.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    // Collect stderr
-    process.stderr?.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    // Handle process exit
-    process.on('close', (code) => {
-      clearTimeout(timeout);
-
-      if (timedOut) {
-        reject(
-          new Error(
-            'PDF conversion timed out. The document may be too complex or large.'
-          )
-        );
-        return;
-      }
-
-      if (code === 0) {
-        resolve();
-      } else {
-        // Parse error message from stderr
-        const errorMessage = parseLibreOfficeError(stderr, stdout);
-        reject(new Error(errorMessage));
-      }
-    });
-
-    // Handle spawn errors (e.g., LibreOffice not found)
-    process.on('error', (err: NodeJS.ErrnoException) => {
-      clearTimeout(timeout);
-
-      if (err.code === 'ENOENT') {
-        reject(
-          new Error(
-            'LibreOffice not found. Please ensure LibreOffice is installed and in PATH.'
-          )
-        );
-      } else {
-        reject(new Error(`Failed to start LibreOffice: ${err.message}`));
-      }
-    });
+): Promise<NonNullable<ServiceResponse['data']>> {
+  // 1. Create FormData
+  const formData = new FormData();
+  // Convert Buffer to Uint8Array for Blob compatibility
+  const uint8Array = new Uint8Array(fileBuffer);
+  const blob = new Blob([uint8Array], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
+  formData.append('file', blob, filename);
+
+  // 2. Setup timeout via AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // 3. Make HTTP request
+    const response = await fetch(CONVERSION_SERVICE_URL, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    // 4. Parse response
+    const result: ServiceResponse = await response.json();
+
+    // 5. Handle errors
+    if (!response.ok || !result.success) {
+      const errorCode = result.code || 'UNKNOWN_ERROR';
+      const errorMessage = parseServiceError(errorCode);
+      throw new Error(errorMessage);
+    }
+
+    if (!result.data?.pdf) {
+      throw new Error('PDF data not found in response');
+    }
+
+    return result.data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Handle specific error types
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        'PDF conversion timed out. The document may be too complex or large.'
+      );
+    }
+
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(
+        'Failed to connect to conversion service. Please check your network connection.'
+      );
+    }
+
+    throw error;
+  }
 }
 
 /**
- * Parses LibreOffice error output to provide meaningful error messages
+ * Maps service error codes to user-friendly error messages
+ * @param errorCode - Error code from the conversion service
+ * @returns User-friendly error message
  */
-function parseLibreOfficeError(stderr: string, stdout: string): string {
-  const combined = stderr + stdout;
+function parseServiceError(errorCode: string): string {
+  const errorMap: Record<string, string> = {
+    MISSING_FILE: 'File upload failed. Please try again.',
+    INVALID_FILE_TYPE: 'Invalid document format. Only .docx files are supported.',
+    FILE_TOO_LARGE: 'File too large. Maximum size is 15MB.',
+    CONVERSION_TIMEOUT:
+      'PDF conversion timed out. The document may be too complex or large.',
+    CONVERSION_FAILED:
+      'PDF conversion failed. The document may be corrupted or incompatible.',
+    PROCESS_ERROR: 'PDF conversion process error. Please try again.',
+    PDF_NOT_FOUND:
+      'PDF file was not created. Conversion may have failed silently.',
+  };
 
-  // Check for common error patterns
-  if (combined.includes('Permission denied')) {
-    return 'Permission denied. Unable to write PDF file.';
-  }
+  return (
+    errorMap[errorCode] ||
+    'PDF conversion failed. Please check the document and try again.'
+  );
+}
 
-  if (combined.includes('format')) {
-    return 'Invalid document format. The file may be corrupted.';
-  }
+/**
+ * Writes base64-encoded PDF data to a file
+ * @param base64Data - Base64-encoded PDF content
+ * @param outputPath - Path where the PDF should be saved
+ */
+async function writeBase64ToPdf(
+  base64Data: string,
+  outputPath: string
+): Promise<void> {
+  try {
+    // Decode base64 to buffer
+    const pdfBuffer = Buffer.from(base64Data, 'base64');
 
-  if (combined.includes('Error')) {
-    // Try to extract the specific error message
-    const errorMatch = combined.match(/Error:?\s*(.+?)(?:\n|$)/i);
-    if (errorMatch && errorMatch[1]) {
-      return `LibreOffice error: ${errorMatch[1].trim()}`;
+    // Verify it's a valid PDF (check magic bytes)
+    if (!pdfBuffer.slice(0, 4).toString('ascii').startsWith('%PDF')) {
+      throw new Error('Invalid PDF data received from conversion service');
     }
-  }
 
-  // Default error message
-  if (stderr.trim()) {
-    return `PDF conversion failed: ${stderr.trim().split('\n')[0]}`;
+    // Write to file atomically (temp file + rename)
+    const tempPath = outputPath + '.tmp';
+    await fs.writeFile(tempPath, pdfBuffer);
+    await fs.rename(tempPath, outputPath);
+  } catch (error) {
+    console.error('Error writing PDF file:', error);
+    throw new Error(
+      error instanceof Error
+        ? `Failed to save PDF: ${error.message}`
+        : 'Failed to save converted PDF'
+    );
   }
-
-  return 'PDF conversion failed. Please check the document and try again.';
 }
