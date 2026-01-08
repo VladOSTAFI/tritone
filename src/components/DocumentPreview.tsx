@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import type { SignatureField as SignatureFieldType } from '@/lib/types';
-import { SignatureField } from './SignatureField';
+import type { TemporarySignature } from '@/lib/types';
+import { SignatureImageOverlay } from './SignatureImageOverlay';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -15,30 +15,34 @@ interface DocumentPreviewProps {
   pdfBlobUrl: string | null;
   isPdfLoading: boolean;
   pdfError: string | null;
-  signatureField: SignatureFieldType | null;
+  temporarySignature: TemporarySignature | null;
   pageNumber: number;
   numPages: number;
   onPageNumberChange: (page: number) => void;
   onLoadSuccess: (numPages: number) => void;
   onLoadError: (error: Error) => void;
-  onSignatureFieldPlace: (field: SignatureFieldType) => void;
-  onSignatureFieldUpdate: (field: SignatureFieldType) => void;
-  canPlaceSignature: boolean;
+  onDocumentClick: (coords: {
+    xN: number;
+    yN: number;
+    pageWidth: number;
+    pageHeight: number;
+    page: number;
+  }) => void;
+  onSignatureUpdate: (signature: TemporarySignature) => void;
 }
 
 export function DocumentPreview({
   pdfBlobUrl,
   isPdfLoading,
   pdfError,
-  signatureField,
+  temporarySignature,
   pageNumber,
   numPages,
   onPageNumberChange,
   onLoadSuccess,
   onLoadError,
-  onSignatureFieldPlace,
-  onSignatureFieldUpdate,
-  canPlaceSignature,
+  onDocumentClick,
+  onSignatureUpdate,
 }: DocumentPreviewProps) {
   // PDF page dimensions for overlay rendering
   const [pageWidth, setPageWidth] = useState<number>(0);
@@ -50,7 +54,7 @@ export function DocumentPreview({
   const [resizeStart, setResizeStart] = useState<{
     x: number;
     y: number;
-    field: SignatureFieldType;
+    signature: TemporarySignature;
   } | null>(null);
 
   // Drag state
@@ -58,24 +62,24 @@ export function DocumentPreview({
   const [dragStart, setDragStart] = useState<{
     x: number;
     y: number;
-    field: SignatureFieldType;
+    signature: TemporarySignature;
   } | null>(null);
 
-  // Local signature field state for real-time updates
-  const [localSignatureField, setLocalSignatureField] =
-    useState<SignatureFieldType | null>(signatureField);
+  // Local temporary signature state for real-time updates
+  const [localTemporarySignature, setLocalTemporarySignature] =
+    useState<TemporarySignature | null>(temporarySignature);
 
   // Sync local state with prop
   useEffect(() => {
-    setLocalSignatureField(signatureField);
-  }, [signatureField]);
+    setLocalTemporarySignature(temporarySignature);
+  }, [temporarySignature]);
 
   const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Don't place new field if resizing or dragging
+    // Don't open modal if resizing or dragging
     if (isResizing || isDragging) return;
 
-    // Only allow placement when allowed by parent
-    if (!canPlaceSignature) return;
+    // Don't open modal if signature already exists
+    if (localTemporarySignature) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const xPx = e.clientX - rect.left;
@@ -94,46 +98,47 @@ export function DocumentPreview({
     const xN = xPx / pageWidthPx;
     const yN = yPx / pageHeightPx;
 
-    // Fixed signature field size
-    const wN = 0.28;
-    const hN = 0.1;
-
-    const newField: SignatureFieldType = { page: pageNumber, xN, yN, wN, hN };
-
     setPageWidth(pageWidthPx);
     setPageHeight(pageHeightPx);
-    setLocalSignatureField(newField);
-    onSignatureFieldPlace(newField);
+
+    // Notify parent with click coordinates
+    onDocumentClick({
+      xN,
+      yN,
+      pageWidth: pageWidthPx,
+      pageHeight: pageHeightPx,
+      page: pageNumber,
+    });
   };
 
   const handleResizeStart = (e: React.MouseEvent, handle: string) => {
     e.stopPropagation();
-    if (!localSignatureField) return;
+    if (!localTemporarySignature) return;
 
     setIsResizing(true);
     setResizeHandle(handle);
     setResizeStart({
       x: e.clientX,
       y: e.clientY,
-      field: { ...localSignatureField },
+      signature: { ...localTemporarySignature },
     });
   };
 
   const handleDragStart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!localSignatureField) return;
+    if (!localTemporarySignature) return;
 
     setIsDragging(true);
     setDragStart({
       x: e.clientX,
       y: e.clientY,
-      field: { ...localSignatureField },
+      signature: { ...localTemporarySignature },
     });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     // Handle resize
-    if (isResizing && resizeStart && localSignatureField && resizeHandle) {
+    if (isResizing && resizeStart && localTemporarySignature && resizeHandle) {
       const deltaXPx = e.clientX - resizeStart.x;
       const deltaYPx = e.clientY - resizeStart.y;
 
@@ -141,48 +146,55 @@ export function DocumentPreview({
       const deltaXN = deltaXPx / pageWidth;
       const deltaYN = deltaYPx / pageHeight;
 
-      const newField = { ...resizeStart.field };
+      const newPosition = { ...resizeStart.signature.position };
 
       // Handle different resize corners
       switch (resizeHandle) {
         case 'top-left':
-          newField.xN = resizeStart.field.xN + deltaXN;
-          newField.yN = resizeStart.field.yN + deltaYN;
-          newField.wN = resizeStart.field.wN - deltaXN;
-          newField.hN = resizeStart.field.hN - deltaYN;
+          newPosition.xN = resizeStart.signature.position.xN + deltaXN;
+          newPosition.yN = resizeStart.signature.position.yN + deltaYN;
+          newPosition.wN = resizeStart.signature.position.wN - deltaXN;
+          newPosition.hN = resizeStart.signature.position.hN - deltaYN;
           break;
         case 'top-right':
-          newField.yN = resizeStart.field.yN + deltaYN;
-          newField.wN = resizeStart.field.wN + deltaXN;
-          newField.hN = resizeStart.field.hN - deltaYN;
+          newPosition.yN = resizeStart.signature.position.yN + deltaYN;
+          newPosition.wN = resizeStart.signature.position.wN + deltaXN;
+          newPosition.hN = resizeStart.signature.position.hN - deltaYN;
           break;
         case 'bottom-left':
-          newField.xN = resizeStart.field.xN + deltaXN;
-          newField.wN = resizeStart.field.wN - deltaXN;
-          newField.hN = resizeStart.field.hN + deltaYN;
+          newPosition.xN = resizeStart.signature.position.xN + deltaXN;
+          newPosition.wN = resizeStart.signature.position.wN - deltaXN;
+          newPosition.hN = resizeStart.signature.position.hN + deltaYN;
           break;
         case 'bottom-right':
-          newField.wN = resizeStart.field.wN + deltaXN;
-          newField.hN = resizeStart.field.hN + deltaYN;
+          newPosition.wN = resizeStart.signature.position.wN + deltaXN;
+          newPosition.hN = resizeStart.signature.position.hN + deltaYN;
           break;
       }
 
       // Enforce minimum size (5% of page dimensions)
       const minSize = 0.05;
-      if (newField.wN < minSize) newField.wN = minSize;
-      if (newField.hN < minSize) newField.hN = minSize;
+      if (newPosition.wN < minSize) newPosition.wN = minSize;
+      if (newPosition.hN < minSize) newPosition.hN = minSize;
 
       // Enforce boundaries (keep within page)
-      if (newField.xN - newField.wN / 2 < 0) newField.xN = newField.wN / 2;
-      if (newField.xN + newField.wN / 2 > 1) newField.xN = 1 - newField.wN / 2;
-      if (newField.yN - newField.hN / 2 < 0) newField.yN = newField.hN / 2;
-      if (newField.yN + newField.hN / 2 > 1) newField.yN = 1 - newField.hN / 2;
+      if (newPosition.xN - newPosition.wN / 2 < 0)
+        newPosition.xN = newPosition.wN / 2;
+      if (newPosition.xN + newPosition.wN / 2 > 1)
+        newPosition.xN = 1 - newPosition.wN / 2;
+      if (newPosition.yN - newPosition.hN / 2 < 0)
+        newPosition.yN = newPosition.hN / 2;
+      if (newPosition.yN + newPosition.hN / 2 > 1)
+        newPosition.yN = 1 - newPosition.hN / 2;
 
-      setLocalSignatureField(newField);
+      setLocalTemporarySignature({
+        ...localTemporarySignature,
+        position: newPosition,
+      });
     }
 
     // Handle drag
-    if (isDragging && dragStart && localSignatureField) {
+    if (isDragging && dragStart && localTemporarySignature) {
       const deltaXPx = e.clientX - dragStart.x;
       const deltaYPx = e.clientY - dragStart.y;
 
@@ -191,40 +203,43 @@ export function DocumentPreview({
       const deltaYN = deltaYPx / pageHeight;
 
       // Calculate new center position
-      let newXN = dragStart.field.xN + deltaXN;
-      let newYN = dragStart.field.yN + deltaYN;
+      let newXN = dragStart.signature.position.xN + deltaXN;
+      let newYN = dragStart.signature.position.yN + deltaYN;
 
       // Enforce boundaries - keep entire field within page
-      const halfW = localSignatureField.wN / 2;
-      const halfH = localSignatureField.hN / 2;
+      const halfW = localTemporarySignature.position.wN / 2;
+      const halfH = localTemporarySignature.position.hN / 2;
 
       if (newXN - halfW < 0) newXN = halfW;
       if (newXN + halfW > 1) newXN = 1 - halfW;
       if (newYN - halfH < 0) newYN = halfH;
       if (newYN + halfH > 1) newYN = 1 - halfH;
 
-      setLocalSignatureField({
-        ...localSignatureField,
-        xN: newXN,
-        yN: newYN,
+      setLocalTemporarySignature({
+        ...localTemporarySignature,
+        position: {
+          ...localTemporarySignature.position,
+          xN: newXN,
+          yN: newYN,
+        },
       });
     }
   };
 
   const handleMouseUp = () => {
     // Handle resize end
-    if (isResizing && localSignatureField) {
+    if (isResizing && localTemporarySignature) {
       setIsResizing(false);
       setResizeHandle(null);
       setResizeStart(null);
-      onSignatureFieldUpdate(localSignatureField);
+      onSignatureUpdate(localTemporarySignature);
     }
 
     // Handle drag end
-    if (isDragging && localSignatureField) {
+    if (isDragging && localTemporarySignature) {
       setIsDragging(false);
       setDragStart(null);
-      onSignatureFieldUpdate(localSignatureField);
+      onSignatureUpdate(localTemporarySignature);
     }
   };
 
@@ -291,10 +306,10 @@ export function DocumentPreview({
               />
             </Document>
 
-            {/* Signature field overlay */}
-            {localSignatureField && (
-              <SignatureField
-                field={localSignatureField}
+            {/* Signature image overlay */}
+            {localTemporarySignature && (
+              <SignatureImageOverlay
+                signature={localTemporarySignature}
                 pageWidth={pageWidth}
                 pageHeight={pageHeight}
                 pageNumber={pageNumber}

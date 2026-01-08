@@ -7,12 +7,16 @@ interface SignatureModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (signatureDataUrl: string) => Promise<void>;
+  mode?: 'place' | 'redraw';
+  title?: string;
 }
 
 export function SignatureModal({
   isOpen,
   onClose,
   onSave,
+  mode = 'place',
+  title = 'Draw Your Signature',
 }: SignatureModalProps) {
   const signatureCanvasRef = useRef<SignatureCanvas | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -64,7 +68,7 @@ export function SignatureModal({
     >
       <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-semibold">Draw Your Signature</h3>
+          <h3 className="text-xl font-semibold">{title}</h3>
           <button
             onClick={onClose}
             className="text-2xl leading-none text-gray-500 hover:text-gray-700"
@@ -109,7 +113,11 @@ export function SignatureModal({
               disabled={isSaving}
               className="flex-1 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSaving ? 'Saving...' : 'Save & Sign'}
+              {isSaving
+                ? 'Placing...'
+                : mode === 'redraw'
+                  ? 'Update Signature'
+                  : 'Place on Document'}
             </button>
           </div>
         </div>

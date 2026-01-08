@@ -5,8 +5,7 @@ import type { DocumentMeta } from '@/lib/types';
 import { DocumentPreview } from '@/components/DocumentPreview';
 import { SignatureModal } from '@/components/SignatureModal';
 import { usePdfPreview } from '@/hooks/usePdfPreview';
-import { useSignatureField } from '@/hooks/useSignatureField';
-import { useDocumentSign } from '@/hooks/useDocumentSign';
+import { useTemporarySignature } from '@/hooks/useTemporarySignature';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
@@ -30,19 +29,17 @@ export default function Home() {
   } = usePdfPreview({ documentStatus: meta?.status || null });
 
   const {
-    signatureField,
-    handleSignatureFieldPlace,
-    handleSignatureFieldUpdate,
-    setSignatureFieldFromMeta,
-    error: signatureFieldError,
-  } = useSignatureField(setMeta);
-
-  const {
-    isSigningModalOpen,
-    openSigningModal,
-    closeSigningModal,
-    handleSign,
-  } = useDocumentSign(setMeta);
+    temporarySignature,
+    isModalOpen,
+    modalMode,
+    openModalForPlacement,
+    openModalForRedraw,
+    closeModal,
+    placeSignature,
+    updateSignaturePosition,
+    deleteSignature,
+    finalizeSignature,
+  } = useTemporarySignature(setMeta);
 
   // Load existing document status on mount
   useEffect(() => {
@@ -82,18 +79,6 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [meta?.status]);
-
-  // Sync signatureField from meta
-  useEffect(() => {
-    setSignatureFieldFromMeta(meta?.signatureField || null);
-  }, [meta?.signatureField, setSignatureFieldFromMeta]);
-
-  // Sync signature field error
-  useEffect(() => {
-    if (signatureFieldError) {
-      setErrorMessage(signatureFieldError);
-    }
-  }, [signatureFieldError]);
 
   // Event Handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,37 +126,51 @@ export default function Home() {
     window.open(`/api/download?type=${type}`, '_blank');
   };
 
-  const handleSignatureFieldPlaceWrapper = async (
-    field: Parameters<typeof handleSignatureFieldPlace>[0]
-  ) => {
+  const handleFinalizeSignature = async () => {
     try {
-      await handleSignatureFieldPlace(field);
+      await finalizeSignature();
       setErrorMessage('');
     } catch (error) {
-      console.error('Failed to place signature field:', error);
-      setErrorMessage('Failed to place signature field');
+      console.error('Finalization error:', error);
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Failed to finalize signature'
+      );
     }
   };
 
-  const handleSignatureFieldUpdateWrapper = async (
-    field: Parameters<typeof handleSignatureFieldUpdate>[0]
-  ) => {
-    try {
-      await handleSignatureFieldUpdate(field);
-      setErrorMessage('');
-    } catch (error) {
-      console.error('Failed to update signature field:', error);
-      setErrorMessage('Failed to update signature field');
+  const handleClearDocument = async () => {
+    if (
+      !confirm(
+        'Are you sure you want to clear all document data? This will remove all files and reset the application.'
+      )
+    ) {
+      return;
     }
-  };
 
-  const handleSignWrapper = async (signatureDataUrl: string) => {
     try {
-      await handleSign(signatureDataUrl);
       setErrorMessage('');
+
+      const response = await fetch('/api/clear', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to clear document');
+      }
+
+      const result = await response.json();
+
+      // Reset all client state
+      setMeta(result.meta);
+      setUploadedFile(null);
+      setUploadStatus('idle');
+      deleteSignature();
     } catch (error) {
-      console.error('Signing error:', error);
-      throw error; // Re-throw to let SignatureModal handle it
+      console.error('Clear error:', error);
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Failed to clear document'
+      );
     }
   };
 
@@ -268,6 +267,14 @@ export default function Home() {
                 Uploaded: {new Date(meta.createdAt).toLocaleString()}
               </div>
             )}
+          {meta && meta.status !== 'empty' && (
+            <button
+              onClick={handleClearDocument}
+              className="mt-2 rounded-md bg-red-600 px-4 py-2 font-medium text-white transition hover:bg-red-700"
+            >
+              Clear Document
+            </button>
+          )}
         </div>
       </section>
 
@@ -289,28 +296,62 @@ export default function Home() {
           pdfBlobUrl={pdfBlobUrl}
           isPdfLoading={isPdfLoading}
           pdfError={pdfError}
-          signatureField={signatureField}
+          temporarySignature={temporarySignature}
           pageNumber={pageNumber}
           numPages={numPages}
           onPageNumberChange={setPageNumber}
           onLoadSuccess={handleLoadSuccess}
           onLoadError={handleLoadError}
-          onSignatureFieldPlace={handleSignatureFieldPlaceWrapper}
-          onSignatureFieldUpdate={handleSignatureFieldUpdateWrapper}
-          canPlaceSignature={meta?.status === 'converted'}
+          onDocumentClick={openModalForPlacement}
+          onSignatureUpdate={updateSignaturePosition}
         />
       </section>
 
-      {/* Section 3: Sign */}
+      {/* Section 3: Signature Controls */}
       <section className="rounded-lg border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 text-xl font-semibold">3. Sign Document</h2>
-        <button
-          onClick={openSigningModal}
-          disabled={!(meta?.status === 'converted' && signatureField !== null)}
-          className="rounded-md bg-blue-600 px-6 py-2 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          Sign Document
-        </button>
+        <h2 className="mb-4 text-xl font-semibold">3. Signature Controls</h2>
+
+        {temporarySignature ? (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Signature placed. Drag to reposition or use the controls below.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={openModalForRedraw}
+                className="rounded-md bg-gray-600 px-4 py-2 font-medium text-white transition hover:bg-gray-700"
+              >
+                Redraw Signature
+              </button>
+
+              <button
+                onClick={deleteSignature}
+                className="rounded-md bg-red-600 px-4 py-2 font-medium text-white transition hover:bg-red-700"
+              >
+                Delete Signature
+              </button>
+
+              <button
+                onClick={handleFinalizeSignature}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700"
+              >
+                Finalize Signature
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-gray-500">
+              Click on the document preview above to place your signature.
+            </p>
+            {meta?.status !== 'converted' && (
+              <p className="mt-2 text-xs text-gray-400">
+                (Upload and convert a document first)
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Section 4: Downloads */}
@@ -360,9 +401,10 @@ export default function Home() {
 
       {/* Signature Modal */}
       <SignatureModal
-        isOpen={isSigningModalOpen}
-        onClose={closeSigningModal}
-        onSave={handleSignWrapper}
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        onSave={placeSignature}
+        mode={modalMode}
       />
     </main>
   );

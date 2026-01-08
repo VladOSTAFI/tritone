@@ -13,6 +13,11 @@ export interface SignatureField {
   hN: number; // Normalized height (0-1)
 }
 
+export interface TemporarySignature {
+  dataUrl: string; // PNG signature image as data URL
+  position: SignatureField; // Position/size info
+}
+
 export interface DocumentMeta {
   status: DocumentStatus;
   createdAt: string | null;
