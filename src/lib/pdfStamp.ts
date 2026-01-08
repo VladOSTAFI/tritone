@@ -35,16 +35,21 @@ export async function stampSignatureOnPdf(
     const { width: pageWidth, height: pageHeight } = page.getSize();
 
     // Convert normalized coordinates to PDF points
-    // PDF coordinate system: origin at bottom-left
+    // PDF coordinate system: origin at bottom-left, browser uses top-left
     const wPt = field.wN * pageWidth;
     const hPt = field.hN * pageHeight;
-    const xPt = field.xN * pageWidth;
-    // Flip Y-axis: PDF uses bottom-left origin, browser uses top-left
-    const yPt = (1 - field.yN) * pageHeight;
 
-    // Calculate position to center the signature in the field
-    const drawX = xPt - wPt / 2;
-    const drawY = yPt - hPt / 2;
+    // field.xN and field.yN represent the CENTER of the signature in browser coordinates
+    // Convert center position from browser coordinates to PDF coordinates
+    const xCenterPt = field.xN * pageWidth;
+    const yCenterPt = field.yN * pageHeight;
+
+    // Calculate top-left corner position for drawing (what drawImage expects)
+    const drawX = xCenterPt - wPt / 2;
+    // Flip Y-axis: PDF Y=0 is bottom, browser Y=0 is top
+    // In browser: yCenter is distance from top
+    // In PDF: we need distance from bottom to the TOP of the signature box
+    const drawY = pageHeight - yCenterPt - hPt / 2;
 
     // Embed the signature image
     const signatureImage = await embedSignatureImage(pdfDoc, signatureDataUrl);

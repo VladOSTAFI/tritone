@@ -31,8 +31,13 @@ export async function GET(request: NextRequest) {
     const meta = await readMeta();
 
     // Get the appropriate PDF path based on type
+    // For preview: if document is signed, show the signed version, otherwise show preview
     const pdfPath =
-      type === 'preview' ? meta.previewPdfPath : meta.signedPdfPath;
+      type === 'preview'
+        ? meta.status === 'signed' && meta.signedPdfPath
+          ? meta.signedPdfPath
+          : meta.previewPdfPath
+        : meta.signedPdfPath;
 
     if (!pdfPath) {
       const message =
