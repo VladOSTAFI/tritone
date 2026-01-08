@@ -22,7 +22,10 @@ export default function Home() {
 
   // Signature state
   const [isSignaturePlaced, setIsSignaturePlaced] = useState<boolean>(false);
-  const [signaturePosition, setSignaturePosition] = useState<{ x: number; y: number } | null>(null);
+  const [signaturePosition, setSignaturePosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Modal state
   const [isSigningModalOpen, setIsSigningModalOpen] = useState<boolean>(false);
@@ -38,7 +41,9 @@ export default function Home() {
   const [pageNumber, setPageNumber] = useState<number>(1);
 
   // Signature field state (normalized coordinates)
-  const [signatureField, setSignatureField] = useState<SignatureField | null>(null);
+  const [signatureField, setSignatureField] = useState<SignatureField | null>(
+    null
+  );
 
   // PDF page dimensions for overlay rendering
   const [pageWidth, setPageWidth] = useState<number>(0);
@@ -50,16 +55,24 @@ export default function Home() {
   // Resize state
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
-  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; field: SignatureField } | null>(null);
+  const [resizeStart, setResizeStart] = useState<{
+    x: number;
+    y: number;
+    field: SignatureField;
+  } | null>(null);
 
   // Drag state
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number; field: SignatureField } | null>(null);
+  const [dragStart, setDragStart] = useState<{
+    x: number;
+    y: number;
+    field: SignatureField;
+  } | null>(null);
 
   // Load existing document status on mount
   useEffect(() => {
     fetch('/api/meta')
-      .then(res => res.json())
+      .then((res) => res.json())
       .then((data: DocumentMeta) => {
         setMeta(data);
         // Update UI state based on existing document
@@ -67,7 +80,7 @@ export default function Home() {
           setUploadStatus('success');
         }
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('Failed to load document status:', error);
       });
   }, []);
@@ -113,7 +126,9 @@ export default function Home() {
           setPdfBlobUrl(url);
         } catch (error) {
           console.error('PDF fetch error:', error);
-          setPdfError(error instanceof Error ? error.message : 'Failed to load PDF');
+          setPdfError(
+            error instanceof Error ? error.message : 'Failed to load PDF'
+          );
         } finally {
           setIsPdfLoading(false);
         }
@@ -185,7 +200,6 @@ export default function Home() {
       const result = await response.json();
       setUploadStatus('success');
       setMeta(result.meta);
-
     } catch (error) {
       console.error('Upload error:', error);
       setUploadStatus('error');
@@ -205,7 +219,9 @@ export default function Home() {
     const yPx = e.clientY - rect.top;
 
     // Get rendered page canvas to extract dimensions
-    const pageElement = e.currentTarget.querySelector('.react-pdf__Page__canvas') as HTMLCanvasElement;
+    const pageElement = e.currentTarget.querySelector(
+      '.react-pdf__Page__canvas'
+    ) as HTMLCanvasElement;
     if (!pageElement) return;
 
     const pageWidthPx = pageElement.width;
@@ -253,11 +269,6 @@ export default function Home() {
     setIsSigningModalOpen(true);
   };
 
-  const handleModalClose = () => {
-    setIsSigningModalOpen(false);
-    setDownloadReady(true);
-  };
-
   const handleSaveSignature = async () => {
     if (!signatureCanvasRef.current) return;
 
@@ -289,7 +300,9 @@ export default function Home() {
       setErrorMessage('');
     } catch (error) {
       console.error('Signing error:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to sign document');
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Failed to sign document'
+      );
     }
   };
 
@@ -452,88 +465,110 @@ export default function Home() {
   };
 
   return (
-    <main className="flex flex-col gap-8 px-4 md:px-8 py-12 max-w-4xl mx-auto">
+    <main className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-12 md:px-8">
       {/* Page Title */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold mb-2">Document Signing MVP</h1>
-        <p className="text-base text-gray-600">Upload, preview, sign, and download your documents</p>
+        <h1 className="mb-2 text-3xl font-bold">Tritone</h1>
+        <p className="text-base text-gray-600">
+          Upload, preview, sign, and download your documents
+        </p>
       </div>
 
       {/* Section 1: Upload DOCX */}
-      <section className="rounded-lg border border-gray-200 p-6 bg-white">
-        <h2 className="text-xl font-semibold mb-4">1. Upload DOCX</h2>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h2 className="mb-4 text-xl font-semibold">1. Upload DOCX</h2>
         <div className="space-y-3">
           <div>
             <input
               type="file"
               accept=".docx"
               onChange={handleFileChange}
-              className="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white file:cursor-pointer hover:file:bg-blue-700 file:transition"
+              className="block w-full text-sm text-gray-600 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:transition hover:file:bg-blue-700"
             />
           </div>
           {uploadedFile && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Selected: {uploadedFile.name}</span>
+              <span className="text-sm text-gray-600">
+                Selected: {uploadedFile.name}
+              </span>
             </div>
           )}
           <button
             onClick={handleUploadClick}
             disabled={!uploadedFile}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
             Upload Document
           </button>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">Status:</span>
             {uploadStatus === 'idle' && (
-              <span className="px-2 py-1 text-xs rounded bg-gray-200 text-gray-800">Idle</span>
+              <span className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-800">
+                Idle
+              </span>
             )}
             {uploadStatus === 'uploading' && (
-              <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Uploading...</span>
+              <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+                Uploading...
+              </span>
             )}
             {meta?.status === 'uploaded' && (
-              <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Converting to PDF...</span>
+              <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
+                Converting to PDF...
+              </span>
             )}
             {meta?.status === 'converted' && (
-              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Converted</span>
+              <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">
+                Converted
+              </span>
             )}
             {meta?.status === 'signed' && (
-              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Signed</span>
+              <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">
+                Signed
+              </span>
             )}
             {meta?.status === 'failed' && (
-              <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Failed</span>
+              <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
+                Failed
+              </span>
             )}
             {uploadStatus === 'error' && !meta && (
-              <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">Error</span>
+              <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
+                Error
+              </span>
             )}
           </div>
           {errorMessage && (
-            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+            <div className="rounded bg-red-50 p-2 text-sm text-red-600">
               {errorMessage}
             </div>
           )}
           {meta?.status === 'failed' && meta.lastError && (
-            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+            <div className="rounded bg-red-50 p-2 text-sm text-red-600">
               {meta.lastError}
             </div>
           )}
-          {meta && (meta.status === 'uploaded' || meta.status === 'converted' || meta.status === 'signed') && meta.createdAt && (
-            <div className="text-xs text-gray-500">
-              Uploaded: {new Date(meta.createdAt).toLocaleString()}
-            </div>
-          )}
+          {meta &&
+            (meta.status === 'uploaded' ||
+              meta.status === 'converted' ||
+              meta.status === 'signed') &&
+            meta.createdAt && (
+              <div className="text-xs text-gray-500">
+                Uploaded: {new Date(meta.createdAt).toLocaleString()}
+              </div>
+            )}
         </div>
       </section>
 
       {/* Section 2: Preview */}
-      <section className="rounded-lg border border-gray-200 p-6 bg-white">
-        <h2 className="text-xl font-semibold mb-4">2. Preview</h2>
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h2 className="mb-4 text-xl font-semibold">2. Preview</h2>
         {(meta?.status === 'converted' || meta?.status === 'signed') && (
           <div className="mb-4">
             <a
               href="/api/download?type=preview"
               download="preview.pdf"
-              className="inline-block text-blue-600 hover:text-blue-800 hover:underline text-sm font-medium"
+              className="inline-block text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
             >
               Download Preview PDF
             </a>
@@ -541,18 +576,20 @@ export default function Home() {
         )}
         <div className="space-y-4">
           <div
-            className={`h-96 md:h-[600px] border-2 ${
-              pdfBlobUrl ? 'border-solid border-gray-300' : 'border-dashed border-gray-300'
-            } rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center transition overflow-auto`}
+            className={`h-96 border-2 md:h-[600px] ${
+              pdfBlobUrl
+                ? 'border-solid border-gray-300'
+                : 'border-dashed border-gray-300'
+            } flex items-center justify-center overflow-auto rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 transition`}
           >
             {isPdfLoading ? (
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
                 <p className="text-gray-600">Loading PDF...</p>
               </div>
             ) : pdfError ? (
-              <div className="text-center p-4">
-                <p className="text-red-600 mb-2">Failed to load PDF</p>
+              <div className="p-4 text-center">
+                <p className="mb-2 text-red-600">Failed to load PDF</p>
                 <p className="text-sm text-gray-500">{pdfError}</p>
               </div>
             ) : pdfBlobUrl ? (
@@ -560,7 +597,7 @@ export default function Home() {
                 onClick={handlePreviewClick}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
-                className="cursor-pointer relative"
+                className="relative cursor-pointer"
               >
                 <Document
                   file={pdfBlobUrl}
@@ -568,7 +605,7 @@ export default function Home() {
                   onLoadError={(error) => setPdfError(error.message)}
                   loading={
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                      <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
                       <p className="text-gray-600">Rendering PDF...</p>
                     </div>
                   }
@@ -581,48 +618,68 @@ export default function Home() {
                   />
                 </Document>
                 {/* Signature field overlay - only show on matching page */}
-                {signatureField && pageNumber === signatureField.page && pageWidth > 0 && (
-                  <div
-                    onMouseDown={handleDragStart}
-                    style={{
-                      position: 'absolute',
-                      left: `${(signatureField.xN - signatureField.wN / 2) * pageWidth}px`,
-                      top: `${(signatureField.yN - signatureField.hN / 2) * pageHeight}px`,
-                      width: `${signatureField.wN * pageWidth}px`,
-                      height: `${signatureField.hN * pageHeight}px`,
-                      border: '2px dashed #3B82F6',
-                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                      pointerEvents: 'auto',
-                      borderRadius: '4px',
-                      zIndex: 10,
-                      cursor: isDragging ? 'grabbing' : 'grab',
-                    }}
-                  >
-                    {/* Resize handles */}
-                    {['top-left', 'top-right', 'bottom-left', 'bottom-right'].map((handle) => (
-                      <div
-                        key={handle}
-                        onMouseDown={(e) => handleResizeStart(e, handle)}
-                        style={{
-                          position: 'absolute',
-                          width: '12px',
-                          height: '12px',
-                          backgroundColor: '#3B82F6',
-                          border: '2px solid white',
-                          borderRadius: '50%',
-                          cursor: `${handle.includes('top') ? 'n' : 's'}${handle.includes('left') ? 'w' : 'e'}-resize`,
-                          ...(handle === 'top-left' && { top: '-6px', left: '-6px' }),
-                          ...(handle === 'top-right' && { top: '-6px', right: '-6px' }),
-                          ...(handle === 'bottom-left' && { bottom: '-6px', left: '-6px' }),
-                          ...(handle === 'bottom-right' && { bottom: '-6px', right: '-6px' }),
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
+                {signatureField &&
+                  pageNumber === signatureField.page &&
+                  pageWidth > 0 && (
+                    <div
+                      onMouseDown={handleDragStart}
+                      style={{
+                        position: 'absolute',
+                        left: `${(signatureField.xN - signatureField.wN / 2) * pageWidth}px`,
+                        top: `${(signatureField.yN - signatureField.hN / 2) * pageHeight}px`,
+                        width: `${signatureField.wN * pageWidth}px`,
+                        height: `${signatureField.hN * pageHeight}px`,
+                        border: '2px dashed #3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        pointerEvents: 'auto',
+                        borderRadius: '4px',
+                        zIndex: 10,
+                        cursor: isDragging ? 'grabbing' : 'grab',
+                      }}
+                    >
+                      {/* Resize handles */}
+                      {[
+                        'top-left',
+                        'top-right',
+                        'bottom-left',
+                        'bottom-right',
+                      ].map((handle) => (
+                        <div
+                          key={handle}
+                          onMouseDown={(e) => handleResizeStart(e, handle)}
+                          style={{
+                            position: 'absolute',
+                            width: '12px',
+                            height: '12px',
+                            backgroundColor: '#3B82F6',
+                            border: '2px solid white',
+                            borderRadius: '50%',
+                            cursor: `${handle.includes('top') ? 'n' : 's'}${handle.includes('left') ? 'w' : 'e'}-resize`,
+                            ...(handle === 'top-left' && {
+                              top: '-6px',
+                              left: '-6px',
+                            }),
+                            ...(handle === 'top-right' && {
+                              top: '-6px',
+                              right: '-6px',
+                            }),
+                            ...(handle === 'bottom-left' && {
+                              bottom: '-6px',
+                              left: '-6px',
+                            }),
+                            ...(handle === 'bottom-right' && {
+                              bottom: '-6px',
+                              right: '-6px',
+                            }),
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 {isSignaturePlaced && signaturePosition && (
                   <div className="mt-4 text-center text-xs text-gray-500">
-                    Signature placed at ({Math.round(signaturePosition.x)}, {Math.round(signaturePosition.y)})
+                    Signature placed at ({Math.round(signaturePosition.x)},{' '}
+                    {Math.round(signaturePosition.y)})
                   </div>
                 )}
               </div>
@@ -639,7 +696,7 @@ export default function Home() {
               <button
                 onClick={() => setPageNumber(Math.max(1, pageNumber - 1))}
                 disabled={pageNumber <= 1}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm font-medium"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 Previous
               </button>
@@ -647,92 +704,80 @@ export default function Home() {
                 Page {pageNumber} of {numPages}
               </span>
               <button
-                onClick={() => setPageNumber(Math.min(numPages, pageNumber + 1))}
+                onClick={() =>
+                  setPageNumber(Math.min(numPages, pageNumber + 1))
+                }
                 disabled={pageNumber >= numPages}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition text-sm font-medium"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 Next
               </button>
+
+              {isSignaturePlaced && signaturePosition && (
+                <button
+                  onClick={handleResetSignature}
+                  className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-300"
+                >
+                  Reset Signature Placement
+                </button>
+              )}
             </div>
           )}
         </div>
       </section>
 
-      {/* Section 3: Signature Placement */}
-      <section className="rounded-lg border border-gray-200 p-6 bg-white">
-        <h2 className="text-xl font-semibold mb-4">3. Signature Placement</h2>
-        <div className="space-y-3">
-          <p className="text-sm text-gray-500">Click on preview to place signature</p>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Signature Status:</span>
-            {isSignaturePlaced ? (
-              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Placed</span>
-            ) : (
-              <span className="px-2 py-1 text-xs rounded bg-gray-200 text-gray-800">Not Placed</span>
-            )}
-          </div>
-          {isSignaturePlaced && signaturePosition && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600">
-                Position: X={Math.round(signaturePosition.x)}, Y={Math.round(signaturePosition.y)}
-              </p>
-              <button
-                onClick={handleResetSignature}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md transition text-sm"
-              >
-                Reset Signature Placement
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Section 4: Sign */}
-      <section className="rounded-lg border border-gray-200 p-6 bg-white">
-        <h2 className="text-xl font-semibold mb-4">4. Sign Document</h2>
+      {/* Section 3: Sign */}
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h2 className="mb-4 text-xl font-semibold">3. Sign Document</h2>
         <button
           onClick={handleSignClick}
           disabled={!(meta?.status === 'converted' && signatureField !== null)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="rounded-md bg-blue-600 px-6 py-2 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
           Sign Document
         </button>
       </section>
 
-      {/* Section 5: Downloads */}
-      <section className="rounded-lg border border-gray-200 p-6 bg-white">
-        <h2 className="text-xl font-semibold mb-4">5. Downloads</h2>
+      {/* Section 4: Downloads */}
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
+        <h2 className="mb-4 text-xl font-semibold">4. Downloads</h2>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleDownload('preview')}
-              disabled={meta?.status !== 'converted' && meta?.status !== 'signed'}
-              className={`text-sm font-medium py-2 px-4 rounded-md transition ${
+              disabled={
+                meta?.status !== 'converted' && meta?.status !== 'signed'
+              }
+              className={`rounded-md px-4 py-2 text-sm font-medium transition ${
                 meta?.status === 'converted' || meta?.status === 'signed'
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'cursor-pointer bg-blue-600 text-white hover:bg-blue-700'
+                  : 'cursor-not-allowed bg-gray-200 text-gray-400'
               }`}
             >
               Download Preview PDF
             </button>
             {meta?.status !== 'converted' && meta?.status !== 'signed' && (
-              <span className="text-xs text-gray-500">(Upload and convert a document first)</span>
+              <span className="text-xs text-gray-500">
+                (Upload and convert a document first)
+              </span>
             )}
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleDownload('signed')}
               disabled={meta?.status !== 'signed'}
-              className={`text-sm font-medium py-2 px-4 rounded-md transition ${
+              className={`rounded-md px-4 py-2 text-sm font-medium transition ${
                 meta?.status === 'signed'
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'cursor-pointer bg-blue-600 text-white hover:bg-blue-700'
+                  : 'cursor-not-allowed bg-gray-200 text-gray-400'
               }`}
             >
               Download Signed PDF
             </button>
             {meta?.status !== 'signed' && (
-              <span className="text-xs text-gray-500">(Complete signing first)</span>
+              <span className="text-xs text-gray-500">
+                (Complete signing first)
+              </span>
             )}
           </div>
         </div>
@@ -740,20 +785,20 @@ export default function Home() {
 
       {/* Modal Overlay */}
       {isSigningModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-semibold">Draw Your Signature</h3>
               <button
                 onClick={() => setIsSigningModalOpen(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+                className="text-2xl leading-none text-gray-500 hover:text-gray-700"
               >
                 &times;
               </button>
             </div>
             <div className="space-y-4">
               {/* Signature Canvas */}
-              <div className="border-2 border-gray-300 rounded-md">
+              <div className="rounded-md border-2 border-gray-300">
                 <SignatureCanvas
                   ref={signatureCanvasRef}
                   canvasProps={{
@@ -769,13 +814,13 @@ export default function Home() {
               <div className="flex gap-2">
                 <button
                   onClick={() => signatureCanvasRef.current?.clear()}
-                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md transition"
+                  className="flex-1 rounded-md bg-gray-200 px-4 py-2 font-medium text-gray-800 transition hover:bg-gray-300"
                 >
                   Clear
                 </button>
                 <button
                   onClick={handleSaveSignature}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition"
+                  className="flex-1 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700"
                 >
                   Save & Sign
                 </button>
