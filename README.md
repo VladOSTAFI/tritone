@@ -25,13 +25,15 @@ A Next.js document signing MVP with automatic DOCX to PDF conversion using exter
 pnpm install
 ```
 
-2. (Optional) Configure environment variables:
+2. Configure environment variables:
 
-Create a `.env.local` file if you need to customize the conversion service URL:
+Create a `.env.local` file with required configuration:
 
 ```bash
 cp .env.example .env.local
 ```
+
+**Required:** Set `BLOB_READ_WRITE_TOKEN` for Vercel Blob Storage (see Environment Variables section below)
 
 3. Run the development server:
 
@@ -43,7 +45,15 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Environment Variables
 
-Optional configuration via `.env.local`:
+Configuration via `.env.local`:
+
+**Required:**
+
+- `BLOB_READ_WRITE_TOKEN` - Vercel Blob Storage token
+  - Get from: https://vercel.com/dashboard/stores
+  - Create a new Blob Store and copy the token
+
+**Optional:**
 
 - `CONVERSION_SERVICE_URL` - URL of document conversion service (default: production GCP service)
 - `PDF_CONVERSION_TIMEOUT_MS` - Timeout in milliseconds (default: 60000)
@@ -56,6 +66,24 @@ Optional configuration via `.env.local`:
 4. Place signature by clicking on document preview
 5. Sign the document with your name
 6. Download signed PDF
+
+## Storage
+
+The application uses **Vercel Blob Storage** to store document files:
+
+- Original DOCX files
+- Converted PDF previews
+- Signed PDFs with signatures
+- Document metadata
+
+This approach ensures:
+
+- Compatibility with Vercel's serverless deployment
+- No ephemeral filesystem issues
+- Automatic scalability and redundancy
+- Public access to blob URLs for downloads
+
+For detailed migration information, see [BLOB_STORAGE_MIGRATION.md](./BLOB_STORAGE_MIGRATION.md).
 
 ### Available Scripts
 

@@ -1,12 +1,12 @@
 import { PDFDocument } from 'pdf-lib';
-import fs from 'fs/promises';
+import { readBlobFile, writeBlobFile, SIGNED_PDF_KEY } from './storage';
 import type { SignatureField } from './types';
 
 /**
  * Stamps a signature image onto a PDF at the specified field location
  *
- * @param inputPdfPath - Path to the source PDF (preview.pdf)
- * @param outputPdfPath - Path where signed PDF will be saved (signed.pdf)
+ * @param inputPdfPath - Blob URL or key to the source PDF (preview.pdf)
+ * @param outputPdfPath - Blob URL or key where signed PDF will be saved (signed.pdf)
  * @param signatureDataUrl - Data URL of signature image (PNG format)
  * @param field - Signature field with normalized coordinates
  */
@@ -17,8 +17,8 @@ export async function stampSignatureOnPdf(
   field: SignatureField
 ): Promise<void> {
   try {
-    // Load the existing PDF
-    const existingPdfBytes = await fs.readFile(inputPdfPath);
+    // Load the existing PDF from blob storage
+    const existingPdfBytes = await readBlobFile('active/preview.pdf');
     const pdfDoc = await PDFDocument.load(existingPdfBytes);
 
     // Get the target page (1-indexed to 0-indexed)
@@ -64,7 +64,13 @@ export async function stampSignatureOnPdf(
 
     // Save the modified PDF
     const pdfBytes = await pdfDoc.save();
-    await fs.writeFile(outputPdfPath, pdfBytes);
+
+    // Write to blob storage
+    await writeBlobFile(
+      SIGNED_PDF_KEY,
+      Buffer.from(pdfBytes),
+      'application/pdf'
+    );
   } catch (error) {
     console.error('Error stamping signature on PDF:', error);
     throw new Error(
@@ -85,6 +91,7 @@ export async function stampSignatureOnPdf(
 async function embedSignatureImage(
   pdfDoc: PDFDocument,
   dataUrl: string
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   try {
     // Extract base64 data from data URL

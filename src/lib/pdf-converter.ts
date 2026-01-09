@@ -1,5 +1,4 @@
-import fs from 'fs/promises';
-import path from 'path';
+import { readBlobFile, writeBlobFile, PREVIEW_PDF_KEY } from './storage';
 
 export interface ConversionResult {
   success: boolean;
@@ -29,18 +28,18 @@ interface ServiceResponse {
 
 /**
  * Converts a DOCX file to PDF using external conversion service
- * @param docxPath - Full path to the DOCX file
- * @param activeDir - Directory where the PDF should be output
- * @returns ConversionResult with success status and PDF path or error message
+ * @param docxPath - Blob URL or key to the DOCX file
+ * @param activeDir - Ignored (kept for backward compatibility)
+ * @returns ConversionResult with success status and PDF blob URL or error message
  */
 export async function convertDocxToPdf(
-  docxPath: string,
-  activeDir: string
+  _docxPath: string,
+  _activeDir: string
 ): Promise<ConversionResult> {
   try {
-    // 1. Read DOCX file into buffer
-    const fileBuffer = await fs.readFile(docxPath);
-    const filename = path.basename(docxPath);
+    // 1. Read DOCX file from blob storage
+    const fileBuffer = await readBlobFile('active/original.docx');
+    const filename = 'original.docx';
 
     // 2. Call external conversion service
     const serviceResponse = await callConversionService(
@@ -49,13 +48,12 @@ export async function convertDocxToPdf(
       CONVERSION_TIMEOUT_MS
     );
 
-    // 3. Write PDF directly to preview.pdf
-    const outputPath = path.join(activeDir, 'preview.pdf');
-    await writeBase64ToPdf(serviceResponse.pdf, outputPath);
+    // 3. Write PDF to blob storage
+    const pdfUrl = await writeBase64ToPdf(serviceResponse.pdf);
 
     return {
       success: true,
-      pdfPath: outputPath,
+      pdfPath: pdfUrl,
     };
   } catch (error) {
     if (error instanceof Error) {
@@ -168,14 +166,11 @@ function parseServiceError(errorCode: string): string {
 }
 
 /**
- * Writes base64-encoded PDF data to a file
+ * Writes base64-encoded PDF data to blob storage
  * @param base64Data - Base64-encoded PDF content
- * @param outputPath - Path where the PDF should be saved
+ * @returns Blob URL of the uploaded PDF
  */
-async function writeBase64ToPdf(
-  base64Data: string,
-  outputPath: string
-): Promise<void> {
+async function writeBase64ToPdf(base64Data: string): Promise<string> {
   try {
     // Decode base64 to buffer
     const pdfBuffer = Buffer.from(base64Data, 'base64');
@@ -185,10 +180,14 @@ async function writeBase64ToPdf(
       throw new Error('Invalid PDF data received from conversion service');
     }
 
-    // Write to file atomically (temp file + rename)
-    const tempPath = outputPath + '.tmp';
-    await fs.writeFile(tempPath, pdfBuffer);
-    await fs.rename(tempPath, outputPath);
+    // Write to blob storage
+    const blobUrl = await writeBlobFile(
+      PREVIEW_PDF_KEY,
+      pdfBuffer,
+      'application/pdf'
+    );
+
+    return blobUrl;
   } catch (error) {
     console.error('Error writing PDF file:', error);
     throw new Error(

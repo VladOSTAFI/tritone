@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readMeta } from '@/lib/storage';
-import fs from 'fs';
-import { Readable } from 'stream';
+import { readMeta, getBlobUrl } from '@/lib/storage';
 
-// Force Node.js runtime for filesystem access
+// Force Node.js runtime for blob storage access
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
@@ -47,24 +45,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 404 });
     }
 
-    // Check if file exists
-    try {
-      await fs.promises.access(pdfPath);
-    } catch {
+    // Get blob URL for the PDF
+    const blobKey =
+      type === 'preview'
+        ? meta.status === 'signed'
+          ? 'active/signed.pdf'
+          : 'active/preview.pdf'
+        : 'active/signed.pdf';
+
+    const blobUrl = await getBlobUrl(blobKey);
+
+    if (!blobUrl) {
       return NextResponse.json(
-        { error: `PDF file not found at expected path` },
+        { error: `PDF file not found in storage` },
         { status: 500 }
       );
     }
 
-    // Create read stream
-    const fileStream = fs.createReadStream(pdfPath);
+    // Fetch the blob content
+    const response = await fetch(blobUrl);
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: `Failed to fetch PDF from storage` },
+        { status: 500 }
+      );
+    }
 
-    // Convert Node.js stream to Web Stream
-    const webStream = Readable.toWeb(fileStream) as ReadableStream;
+    // Get the blob as a stream
+    const blob = await response.blob();
+    const stream = blob.stream();
 
     // Return PDF with appropriate headers
-    return new Response(webStream, {
+    return new Response(stream, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${type}.pdf"`,

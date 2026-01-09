@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { TemporarySignature, DocumentMeta, SignatureField } from '@/lib/types';
+import type {
+  TemporarySignature,
+  DocumentMeta,
+  SignatureField,
+} from '@/lib/types';
 
 interface PendingCoords {
   xN: number;
@@ -29,10 +33,13 @@ interface UseTemporarySignatureReturn {
 export function useTemporarySignature(
   setMeta: React.Dispatch<React.SetStateAction<DocumentMeta | null>>
 ): UseTemporarySignatureReturn {
-  const [temporarySignature, setTemporarySignature] = useState<TemporarySignature | null>(null);
+  const [temporarySignature, setTemporarySignature] =
+    useState<TemporarySignature | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<ModalMode>('place');
-  const [pendingCoords, setPendingCoords] = useState<PendingCoords | null>(null);
+  const [pendingCoords, setPendingCoords] = useState<PendingCoords | null>(
+    null
+  );
 
   const openModalForPlacement = useCallback((coords: PendingCoords) => {
     setPendingCoords(coords);
@@ -83,9 +90,12 @@ export function useTemporarySignature(
     [modalMode, pendingCoords, temporarySignature, closeModal]
   );
 
-  const updateSignaturePosition = useCallback((signature: TemporarySignature) => {
-    setTemporarySignature(signature);
-  }, []);
+  const updateSignaturePosition = useCallback(
+    (signature: TemporarySignature) => {
+      setTemporarySignature(signature);
+    },
+    []
+  );
 
   const deleteSignature = useCallback(() => {
     setTemporarySignature(null);

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readMeta, writeMeta, SIGNED_PDF_PATH } from '@/lib/storage';
+import {
+  readMeta,
+  writeMeta,
+  SIGNED_PDF_KEY,
+  blobExists,
+  getBlobUrl,
+} from '@/lib/storage';
 import { stampSignatureOnPdf } from '@/lib/pdfStamp';
-import fs from 'fs/promises';
 
 // Force Node.js runtime for filesystem access
 export const runtime = 'nodejs';
@@ -62,12 +67,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify preview PDF exists on disk
-    try {
-      await fs.access(meta.previewPdfPath);
-    } catch {
+    // Verify preview PDF exists in blob storage
+    const previewExists = await blobExists('active/preview.pdf');
+    if (!previewExists) {
       return NextResponse.json(
-        { error: 'Preview PDF file not found on disk' },
+        { error: 'Preview PDF file not found in storage' },
         { status: 500 }
       );
     }
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
     try {
       await stampSignatureOnPdf(
         meta.previewPdfPath,
-        SIGNED_PDF_PATH,
+        SIGNED_PDF_KEY,
         signatureDataUrl,
         meta.signatureField
       );
@@ -93,11 +97,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get the signed PDF blob URL
+    const signedPdfUrl = await getBlobUrl('active/signed.pdf');
+
     // Update meta: status=signed, signedPdfPath set
     const updatedMeta = {
       ...meta,
       status: 'signed' as const,
-      signedPdfPath: SIGNED_PDF_PATH,
+      signedPdfPath: signedPdfUrl || SIGNED_PDF_KEY,
     };
 
     await writeMeta(updatedMeta);

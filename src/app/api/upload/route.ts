@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  saveOriginalDocx,
-  writeMeta,
-  readMeta,
-  ACTIVE_DIR,
-} from '@/lib/storage';
+import { saveOriginalDocx, writeMeta, readMeta } from '@/lib/storage';
 import { convertDocxToPdf } from '@/lib/pdf-converter';
 
 // Force Node.js runtime for filesystem access
@@ -53,11 +48,11 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Save file to filesystem
+    // Save file to blob storage
     const savedPath = await saveOriginalDocx(buffer, file.name);
 
-    // Convert DOCX to PDF
-    const conversionResult = await convertDocxToPdf(savedPath, ACTIVE_DIR);
+    // Convert DOCX to PDF (activeDir parameter is ignored in blob storage)
+    const conversionResult = await convertDocxToPdf(savedPath, '');
 
     // Update meta.json based on conversion result
     const meta = {

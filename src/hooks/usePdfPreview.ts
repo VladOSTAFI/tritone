@@ -37,8 +37,11 @@ export function usePdfPreview({
 
         try {
           // Add cache-busting parameter to force reload when signed
-          const cacheBuster = documentStatus === 'signed' ? `&t=${Date.now()}` : '';
-          const response = await fetch(`/api/download?type=preview${cacheBuster}`);
+          const cacheBuster =
+            documentStatus === 'signed' ? `&t=${Date.now()}` : '';
+          const response = await fetch(
+            `/api/download?type=preview${cacheBuster}`
+          );
           if (!response.ok) {
             throw new Error(`Failed to load PDF: ${response.status}`);
           }
