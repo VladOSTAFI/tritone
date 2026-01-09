@@ -6,7 +6,7 @@ import { convertDocxToPdf } from '@/lib/pdf-converter';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60 seconds for conversion
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB in bytes
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 15MB in bytes
 
 const VALID_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
     // Save file to blob storage
     const savedPath = await saveOriginalDocx(buffer, file.name);
 
-    // Convert DOCX to PDF (activeDir parameter is ignored in blob storage)
-    const conversionResult = await convertDocxToPdf(savedPath, '');
+    // Convert DOCX to PDF using the buffer directly (no round trip to storage)
+    const conversionResult = await convertDocxToPdf(buffer, file.name);
 
     // Update meta.json based on conversion result
-    const meta = {
+    const metaToWrite = {
       status: conversionResult.success
         ? ('converted' as const)
         : ('failed' as const),
@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
         ? null
         : conversionResult.error || 'PDF conversion failed',
     };
-    await writeMeta(meta);
+
+    // writeMeta returns the written data to avoid eventual consistency issues
+    const meta = await writeMeta(metaToWrite);
 
     return NextResponse.json({
       success: true,

@@ -1,4 +1,4 @@
-import { readBlobFile, writeBlobFile, PREVIEW_PDF_KEY } from './storage';
+import { writeBlobFile, PREVIEW_PDF_KEY } from './storage';
 
 export interface ConversionResult {
   success: boolean;
@@ -28,27 +28,23 @@ interface ServiceResponse {
 
 /**
  * Converts a DOCX file to PDF using external conversion service
- * @param docxPath - Blob URL or key to the DOCX file
- * @param activeDir - Ignored (kept for backward compatibility)
+ * @param fileBuffer - Buffer containing the DOCX file data
+ * @param filename - Original filename (optional, defaults to 'original.docx')
  * @returns ConversionResult with success status and PDF blob URL or error message
  */
 export async function convertDocxToPdf(
-  _docxPath: string,
-  _activeDir: string
+  fileBuffer: Buffer,
+  filename: string = 'original.docx'
 ): Promise<ConversionResult> {
   try {
-    // 1. Read DOCX file from blob storage
-    const fileBuffer = await readBlobFile('active/original.docx');
-    const filename = 'original.docx';
-
-    // 2. Call external conversion service
+    // 1. Call external conversion service
     const serviceResponse = await callConversionService(
       fileBuffer,
       filename,
       CONVERSION_TIMEOUT_MS
     );
 
-    // 3. Write PDF to blob storage
+    // 2. Write PDF to blob storage
     const pdfUrl = await writeBase64ToPdf(serviceResponse.pdf);
 
     return {

@@ -65,12 +65,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Update meta with signature field
-    const updatedMeta = {
+    const metaToWrite = {
       ...meta,
       signatureField: { page, xN, yN, wN, hN },
     };
 
-    await writeMeta(updatedMeta);
+    // writeMeta returns the written data to avoid eventual consistency issues
+    const updatedMeta = await writeMeta(metaToWrite);
 
     return NextResponse.json({
       success: true,

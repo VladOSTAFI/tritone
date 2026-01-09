@@ -101,13 +101,14 @@ export async function POST(request: NextRequest) {
     const signedPdfUrl = await getBlobUrl('active/signed.pdf');
 
     // Update meta: status=signed, signedPdfPath set
-    const updatedMeta = {
+    const metaToWrite = {
       ...meta,
       status: 'signed' as const,
       signedPdfPath: signedPdfUrl || SIGNED_PDF_KEY,
     };
 
-    await writeMeta(updatedMeta);
+    // writeMeta returns the written data to avoid eventual consistency issues
+    const updatedMeta = await writeMeta(metaToWrite);
 
     return NextResponse.json({
       success: true,
