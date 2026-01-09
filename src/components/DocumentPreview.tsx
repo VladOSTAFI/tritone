@@ -74,6 +74,26 @@ export function DocumentPreview({
     setLocalTemporarySignature(temporarySignature);
   }, [temporarySignature]);
 
+  // Update dimensions on window resize to maintain correct positioning
+  useEffect(() => {
+    const updateDimensions = () => {
+      const canvasElement = document.querySelector(
+        '.react-pdf__Page__canvas'
+      ) as HTMLCanvasElement;
+      if (canvasElement) {
+        const canvasRect = canvasElement.getBoundingClientRect();
+        setPageWidth(canvasRect.width);
+        setPageHeight(canvasRect.height);
+      }
+    };
+
+    window.addEventListener('resize', updateDimensions);
+
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, [pageNumber]);
+
   const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // Don't open modal if resizing or dragging
     if (isResizing || isDragging) return;
@@ -91,8 +111,10 @@ export function DocumentPreview({
     ) as HTMLCanvasElement;
     if (!pageElement) return;
 
-    const pageWidthPx = pageElement.width;
-    const pageHeightPx = pageElement.height;
+    // Use displayed dimensions (what user sees) instead of canvas internal resolution
+    const canvasRect = pageElement.getBoundingClientRect();
+    const pageWidthPx = canvasRect.width;
+    const pageHeightPx = canvasRect.height;
 
     // Calculate normalized coordinates (0-1)
     const xN = xPx / pageWidthPx;
@@ -251,12 +273,17 @@ export function DocumentPreview({
     _pageInfo?: { view?: number[] };
     view?: number[];
   }) => {
-    const canvas = page._pageInfo || page;
-    if (canvas && 'view' in canvas && canvas.view) {
-      const [, , width, height] = canvas.view;
-      setPageWidth(width);
-      setPageHeight(height);
-    }
+    // Use requestAnimationFrame to ensure canvas is fully rendered
+    requestAnimationFrame(() => {
+      const canvasElement = document.querySelector(
+        '.react-pdf__Page__canvas'
+      ) as HTMLCanvasElement;
+      if (canvasElement) {
+        const canvasRect = canvasElement.getBoundingClientRect();
+        setPageWidth(canvasRect.width);
+        setPageHeight(canvasRect.height);
+      }
+    });
   };
 
   return (
