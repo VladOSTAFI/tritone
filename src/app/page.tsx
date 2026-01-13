@@ -27,6 +27,8 @@ export default function Home() {
     setPageNumber,
     handleLoadSuccess,
     handleLoadError,
+    retryAttempt,
+    maxRetries,
   } = usePdfPreview({ documentStatus: meta.status });
 
   const {
@@ -273,6 +275,8 @@ export default function Home() {
           onLoadError={handleLoadError}
           onDocumentClick={openModalForPlacement}
           onSignatureUpdate={updateSignaturePosition}
+          retryAttempt={retryAttempt}
+          maxRetries={maxRetries}
         />
       </section>
 

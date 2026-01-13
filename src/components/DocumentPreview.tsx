@@ -29,6 +29,8 @@ interface DocumentPreviewProps {
     page: number;
   }) => void;
   onSignatureUpdate: (signature: TemporarySignature) => void;
+  retryAttempt?: number;
+  maxRetries?: number;
 }
 
 export function DocumentPreview({
@@ -43,6 +45,8 @@ export function DocumentPreview({
   onLoadError,
   onDocumentClick,
   onSignatureUpdate,
+  retryAttempt = 0,
+  maxRetries = 5,
 }: DocumentPreviewProps) {
   // PDF page dimensions for overlay rendering
   const [pageWidth, setPageWidth] = useState<number>(0);
@@ -300,6 +304,11 @@ export function DocumentPreview({
           <div className="text-center">
             <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
             <p className="text-gray-600">Loading PDF...</p>
+            {retryAttempt > 0 && (
+              <p className="mt-2 text-sm text-blue-600">
+                Retrying... (Attempt {retryAttempt} of {maxRetries})
+              </p>
+            )}
           </div>
         ) : pdfError ? (
           <div className="p-4 text-center">
