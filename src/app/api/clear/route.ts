@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
-import { clearActiveDocument, readMeta } from '@/lib/storage';
+import { list, del } from '@vercel/blob';
 
 export async function POST() {
   try {
-    // Clear all document data
-    await clearActiveDocument();
+    // List all blobs with 'active/' prefix
+    const { blobs } = await list({ prefix: 'active/' });
 
-    // Read the reset meta to return to client
-    const meta = await readMeta();
+    // Delete all blobs in the active directory
+    await Promise.all(blobs.map((blob) => del(blob.url).catch(() => {})));
 
     return NextResponse.json({
       success: true,
-      meta,
-      message: 'Document data cleared successfully',
+      message: 'All files cleared successfully',
     });
   } catch (error) {
     console.error('Clear error:', error);
@@ -21,7 +20,7 @@ export async function POST() {
         error:
           error instanceof Error
             ? error.message
-            : 'Failed to clear document data',
+            : 'Failed to clear files',
       },
       { status: 500 }
     );

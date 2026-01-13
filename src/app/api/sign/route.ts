@@ -1,22 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  readMeta,
-  writeMeta,
-  SIGNED_PDF_KEY,
-  blobExists,
-  getBlobUrl,
-} from '@/lib/storage';
+import { head } from '@vercel/blob';
 import { stampSignatureOnPdf } from '@/lib/pdfStamp';
+import type { SignatureField } from '@/lib/types';
 
 // Force Node.js runtime for filesystem access
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60 seconds for PDF stamping
 
+const PREVIEW_PDF_KEY = 'active/preview.pdf';
+const SIGNED_PDF_KEY = 'active/signed.pdf';
+
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { signatureDataUrl } = body;
+    const { signatureDataUrl, signatureField } = body as {
+      signatureDataUrl: string;
+      signatureField: SignatureField;
+    };
 
     // Validation: signatureDataUrl required
     if (!signatureDataUrl || typeof signatureDataUrl !== 'string') {
@@ -34,55 +35,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read current meta
-    const meta = await readMeta();
-
-    // Validation: Preview PDF must exist
-    if (!meta.previewPdfPath) {
+    // Validation: Signature field must be provided
+    if (!signatureField) {
       return NextResponse.json(
-        {
-          error:
-            'Preview PDF not found. Please upload and convert a document first.',
-        },
+        { error: 'signatureField is required' },
         { status: 400 }
       );
     }
 
-    // Validation: Signature field must be placed
-    if (!meta.signatureField) {
+    // Validate signature field structure
+    const { page, xN, yN, wN, hN } = signatureField;
+    if (
+      typeof page !== 'number' ||
+      typeof xN !== 'number' ||
+      typeof yN !== 'number' ||
+      typeof wN !== 'number' ||
+      typeof hN !== 'number'
+    ) {
       return NextResponse.json(
-        {
-          error:
-            'Signature field not placed. Please place signature field first.',
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validation: Document must be converted
-    if (meta.status !== 'converted') {
-      return NextResponse.json(
-        { error: 'Document must be in converted state to sign' },
+        { error: 'Invalid signature field data' },
         { status: 400 }
       );
     }
 
     // Verify preview PDF exists in blob storage
-    const previewExists = await blobExists('active/preview.pdf');
-    if (!previewExists) {
+    let previewPdfUrl: string;
+    try {
+      const previewPdfBlob = await head(PREVIEW_PDF_KEY);
+      previewPdfUrl = previewPdfBlob.url;
+    } catch {
       return NextResponse.json(
         { error: 'Preview PDF file not found in storage' },
-        { status: 500 }
+        { status: 404 }
       );
     }
 
     // Stamp signature onto PDF
     try {
       await stampSignatureOnPdf(
-        meta.previewPdfPath,
+        previewPdfUrl,
         SIGNED_PDF_KEY,
         signatureDataUrl,
-        meta.signatureField
+        signatureField
       );
     } catch (stampError) {
       console.error('PDF stamping error:', stampError);
@@ -98,37 +92,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the signed PDF blob URL
-    const signedPdfUrl = await getBlobUrl('active/signed.pdf');
-
-    // Update meta: status=signed, signedPdfPath set
-    const metaToWrite = {
-      ...meta,
-      status: 'signed' as const,
-      signedPdfPath: signedPdfUrl || SIGNED_PDF_KEY,
-    };
-
-    // writeMeta returns the written data to avoid eventual consistency issues
-    const updatedMeta = await writeMeta(metaToWrite);
+    const signedPdfBlob = await head(SIGNED_PDF_KEY);
 
     return NextResponse.json({
       success: true,
-      meta: updatedMeta,
+      signedPdfUrl: signedPdfBlob.url,
     });
   } catch (error) {
     console.error('Signing error:', error);
-
-    // Try to update meta with error status
-    try {
-      const currentMeta = await readMeta();
-      await writeMeta({
-        ...currentMeta,
-        status: 'failed',
-        lastError: error instanceof Error ? error.message : 'Signing failed',
-      });
-    } catch (metaError) {
-      console.error('Failed to update meta with error:', metaError);
-    }
-
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Signing failed' },
       { status: 500 }

@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import type { DocumentMeta } from '@/lib/types';
+import { useState } from 'react';
 import { DocumentPreview } from '@/components/DocumentPreview';
 import { SignatureModal } from '@/components/SignatureModal';
 import { usePdfPreview } from '@/hooks/usePdfPreview';
 import { useTemporarySignature } from '@/hooks/useTemporarySignature';
+import { useDocumentContext } from '@/contexts/DocumentContext';
 
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 export default function Home() {
+  const { meta, updateMeta, resetMeta } = useDocumentContext();
+
   // File upload state
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
-  const [meta, setMeta] = useState<DocumentMeta | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Custom hooks for PDF preview and signing
@@ -26,7 +27,7 @@ export default function Home() {
     setPageNumber,
     handleLoadSuccess,
     handleLoadError,
-  } = usePdfPreview({ documentStatus: meta?.status || null });
+  } = usePdfPreview({ documentStatus: meta.status });
 
   const {
     temporarySignature,
@@ -39,46 +40,7 @@ export default function Home() {
     updateSignaturePosition,
     deleteSignature,
     finalizeSignature,
-  } = useTemporarySignature(setMeta);
-
-  // Load existing document status on mount
-  useEffect(() => {
-    fetch('/api/meta')
-      .then((res) => res.json())
-      .then((data: DocumentMeta) => {
-        setMeta(data);
-        // Update UI state based on existing document
-        if (data.status === 'uploaded' || data.status === 'converted') {
-          setUploadStatus('success');
-        }
-      })
-      .catch((error) => {
-        console.error('Failed to load document status:', error);
-      });
-  }, []);
-
-  // Poll for conversion status when document is uploaded
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (meta?.status === 'uploaded') {
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/meta');
-          const data = await res.json();
-          setMeta(data);
-
-          if (data.status !== 'uploaded') {
-            clearInterval(interval);
-          }
-        } catch (error) {
-          console.error('Failed to poll meta:', error);
-        }
-      }, 2000); // Poll every 2 seconds
-    }
-
-    return () => clearInterval(interval);
-  }, [meta?.status]);
+  } = useTemporarySignature();
 
   // Event Handlers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,12 +75,30 @@ export default function Home() {
       }
 
       const result = await response.json();
+
+      // Update metadata on frontend
+      updateMeta({
+        status: 'converted',
+        createdAt: new Date().toISOString(),
+        originalDocxPath: result.originalDocxUrl,
+        previewPdfPath: result.previewPdfUrl,
+        signedPdfPath: null,
+        signatureField: null,
+        lastError: null,
+      });
+
       setUploadStatus('success');
-      setMeta(result.meta);
     } catch (error) {
       console.error('Upload error:', error);
       setUploadStatus('error');
       setErrorMessage(error instanceof Error ? error.message : 'Upload failed');
+
+      // Update metadata with error
+      updateMeta({
+        ...meta,
+        status: 'failed',
+        lastError: error instanceof Error ? error.message : 'Upload failed',
+      });
     }
   };
 
@@ -159,10 +139,8 @@ export default function Home() {
         throw new Error(error.error || 'Failed to clear document');
       }
 
-      const result = await response.json();
-
       // Reset all client state
-      setMeta(result.meta);
+      resetMeta();
       setUploadedFile(null);
       setUploadStatus('idle');
       deleteSignature();
@@ -205,14 +183,14 @@ export default function Home() {
           )}
           <button
             onClick={handleUploadClick}
-            disabled={!uploadedFile}
+            disabled={!uploadedFile || uploadStatus === 'uploading'}
             className="rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
           >
-            Upload Document
+            {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload Document'}
           </button>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">Status:</span>
-            {uploadStatus === 'idle' && (
+            {uploadStatus === 'idle' && meta.status === 'empty' && (
               <span className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-800">
                 Idle
               </span>
@@ -222,27 +200,22 @@ export default function Home() {
                 Uploading...
               </span>
             )}
-            {meta?.status === 'uploaded' && (
-              <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-800">
-                Converting to PDF...
-              </span>
-            )}
-            {meta?.status === 'converted' && (
+            {meta.status === 'converted' && (
               <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">
                 Converted
               </span>
             )}
-            {meta?.status === 'signed' && (
+            {meta.status === 'signed' && (
               <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">
                 Signed
               </span>
             )}
-            {meta?.status === 'failed' && (
+            {meta.status === 'failed' && (
               <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
                 Failed
               </span>
             )}
-            {uploadStatus === 'error' && !meta && (
+            {uploadStatus === 'error' && meta.status === 'empty' && (
               <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
                 Error
               </span>
@@ -253,21 +226,17 @@ export default function Home() {
               {errorMessage}
             </div>
           )}
-          {meta?.status === 'failed' && meta.lastError && (
+          {meta.status === 'failed' && meta.lastError && (
             <div className="rounded bg-red-50 p-2 text-sm text-red-600">
               {meta.lastError}
             </div>
           )}
-          {meta &&
-            (meta.status === 'uploaded' ||
-              meta.status === 'converted' ||
-              meta.status === 'signed') &&
-            meta.createdAt && (
-              <div className="text-xs text-gray-500">
-                Uploaded: {new Date(meta.createdAt).toLocaleString()}
-              </div>
-            )}
-          {meta && meta.status !== 'empty' && (
+          {meta.createdAt && meta.status !== 'empty' && (
+            <div className="text-xs text-gray-500">
+              Uploaded: {new Date(meta.createdAt).toLocaleString()}
+            </div>
+          )}
+          {meta.status !== 'empty' && (
             <button
               onClick={handleClearDocument}
               className="mt-2 rounded-md bg-red-600 px-4 py-2 font-medium text-white transition hover:bg-red-700"
@@ -281,7 +250,7 @@ export default function Home() {
       {/* Section 2: Preview */}
       <section className="rounded-lg border border-gray-200 bg-white p-6">
         <h2 className="mb-4 text-xl font-semibold">2. Preview</h2>
-        {(meta?.status === 'converted' || meta?.status === 'signed') && (
+        {(meta.status === 'converted' || meta.status === 'signed') && (
           <div className="mb-4">
             <a
               href="/api/download?type=preview"
@@ -345,7 +314,7 @@ export default function Home() {
             <p className="text-sm text-gray-500">
               Click on the document preview above to place your signature.
             </p>
-            {meta?.status !== 'converted' && (
+            {meta.status !== 'converted' && (
               <p className="mt-2 text-xs text-gray-400">
                 (Upload and convert a document first)
               </p>
@@ -362,17 +331,17 @@ export default function Home() {
             <button
               onClick={() => handleDownload('preview')}
               disabled={
-                meta?.status !== 'converted' && meta?.status !== 'signed'
+                meta.status !== 'converted' && meta.status !== 'signed'
               }
               className={`rounded-md px-4 py-2 text-sm font-medium transition ${
-                meta?.status === 'converted' || meta?.status === 'signed'
+                meta.status === 'converted' || meta.status === 'signed'
                   ? 'cursor-pointer bg-blue-600 text-white hover:bg-blue-700'
                   : 'cursor-not-allowed bg-gray-200 text-gray-400'
               }`}
             >
               Download Preview PDF
             </button>
-            {meta?.status !== 'converted' && meta?.status !== 'signed' && (
+            {meta.status !== 'converted' && meta.status !== 'signed' && (
               <span className="text-xs text-gray-500">
                 (Upload and convert a document first)
               </span>
@@ -381,16 +350,16 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => handleDownload('signed')}
-              disabled={meta?.status !== 'signed'}
+              disabled={meta.status !== 'signed'}
               className={`rounded-md px-4 py-2 text-sm font-medium transition ${
-                meta?.status === 'signed'
+                meta.status === 'signed'
                   ? 'cursor-pointer bg-blue-600 text-white hover:bg-blue-700'
                   : 'cursor-not-allowed bg-gray-200 text-gray-400'
               }`}
             >
               Download Signed PDF
             </button>
-            {meta?.status !== 'signed' && (
+            {meta.status !== 'signed' && (
               <span className="text-xs text-gray-500">
                 (Complete signing first)
               </span>

@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveOriginalDocx, writeMeta, readMeta } from '@/lib/storage';
+import { put, head, del } from '@vercel/blob';
 import { convertDocxToPdf } from '@/lib/pdf-converter';
 
 // Force Node.js runtime for filesystem access
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60 seconds for conversion
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 15MB in bytes
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 const VALID_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
+
+const DOCX_KEY = 'active/original.docx';
+const PREVIEW_PDF_KEY = 'active/preview.pdf';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
     // Validation: File size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 15MB' },
+        { error: 'File too large. Maximum size is 5MB' },
         { status: 400 }
       );
     }
@@ -48,52 +51,45 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Save file to blob storage
-    const savedPath = await saveOriginalDocx(buffer, file.name);
+    // Delete existing DOCX blob if it exists
+    try {
+      const existing = await head(DOCX_KEY);
+      await del(existing.url);
+    } catch {
+      // Blob doesn't exist, that's fine
+    }
+
+    // Save DOCX file to blob storage
+    const docxBlob = await put(DOCX_KEY, buffer, {
+      access: 'public',
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
 
     // Convert DOCX to PDF using the buffer directly (no round trip to storage)
     const conversionResult = await convertDocxToPdf(buffer, file.name);
 
-    // Update meta.json based on conversion result
-    const metaToWrite = {
-      status: conversionResult.success
-        ? ('converted' as const)
-        : ('failed' as const),
-      createdAt: new Date().toISOString(),
-      originalDocxPath: savedPath,
-      previewPdfPath: conversionResult.success
-        ? conversionResult.pdfPath || null
-        : null,
-      signedPdfPath: null,
-      signatureField: null,
-      lastError: conversionResult.success
-        ? null
-        : conversionResult.error || 'PDF conversion failed',
-    };
+    if (!conversionResult.success) {
+      return NextResponse.json(
+        {
+          error: conversionResult.error || 'PDF conversion failed',
+          originalDocxUrl: docxBlob.url,
+        },
+        { status: 500 }
+      );
+    }
 
-    // writeMeta returns the written data to avoid eventual consistency issues
-    const meta = await writeMeta(metaToWrite);
+    // Get preview PDF URL from blob storage
+    const previewPdfBlob = await head(PREVIEW_PDF_KEY);
 
     return NextResponse.json({
       success: true,
-      message: 'File uploaded successfully',
-      meta,
+      message: 'File uploaded and converted successfully',
+      originalDocxUrl: docxBlob.url,
+      previewPdfUrl: previewPdfBlob.url,
     });
   } catch (error) {
     console.error('Upload error:', error);
-
-    // Try to update meta with error status
-    try {
-      const currentMeta = await readMeta();
-      await writeMeta({
-        ...currentMeta,
-        status: 'failed',
-        lastError: error instanceof Error ? error.message : 'Upload failed',
-      });
-    } catch (metaError) {
-      console.error('Failed to update meta with error:', metaError);
-    }
-
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Upload failed' },
       { status: 500 }

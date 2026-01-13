@@ -1,11 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type {
-  TemporarySignature,
-  DocumentMeta,
-  SignatureField,
-} from '@/lib/types';
+import type { TemporarySignature, SignatureField } from '@/lib/types';
+import { useDocumentContext } from '@/contexts/DocumentContext';
 
 interface PendingCoords {
   xN: number;
@@ -30,9 +27,8 @@ interface UseTemporarySignatureReturn {
   finalizeSignature: () => Promise<void>;
 }
 
-export function useTemporarySignature(
-  setMeta: React.Dispatch<React.SetStateAction<DocumentMeta | null>>
-): UseTemporarySignatureReturn {
+export function useTemporarySignature(): UseTemporarySignatureReturn {
+  const { meta, updateMeta } = useDocumentContext();
   const [temporarySignature, setTemporarySignature] =
     useState<TemporarySignature | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -105,27 +101,16 @@ export function useTemporarySignature(
     if (!temporarySignature) return;
 
     try {
-      // Step 1: Save signature field position to backend
-      const fieldResponse = await fetch('/api/field', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(temporarySignature.position),
-      });
-
-      if (!fieldResponse.ok) {
-        const error = await fieldResponse.json();
-        throw new Error(error.error || 'Failed to save signature field');
-      }
-
-      // Step 2: Sign the document (stamp signature on PDF)
+      // Call backend to sign the document with signature data and field position
       const signResponse = await fetch('/api/sign', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ signatureDataUrl: temporarySignature.dataUrl }),
+        body: JSON.stringify({
+          signatureDataUrl: temporarySignature.dataUrl,
+          signatureField: temporarySignature.position,
+        }),
       });
 
       if (!signResponse.ok) {
@@ -135,16 +120,21 @@ export function useTemporarySignature(
 
       const result = await signResponse.json();
 
-      // Step 3: Update meta state to 'signed'
-      setMeta(result.meta);
+      // Update meta state to 'signed' on frontend
+      updateMeta({
+        ...meta,
+        status: 'signed',
+        signedPdfPath: result.signedPdfUrl,
+        signatureField: temporarySignature.position,
+      });
 
-      // Step 4: Clear temporary signature (now permanent)
+      // Clear temporary signature (now permanent)
       setTemporarySignature(null);
     } catch (error) {
       console.error('Finalization error:', error);
       throw error;
     }
-  }, [temporarySignature, setMeta]);
+  }, [temporarySignature, meta, updateMeta]);
 
   return {
     temporarySignature,

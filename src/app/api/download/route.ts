@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readMeta, getBlobUrl } from '@/lib/storage';
+import { head } from '@vercel/blob';
 
 // Force Node.js runtime for blob storage access
 export const runtime = 'nodejs';
@@ -25,41 +25,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Read metadata to get file path
-    const meta = await readMeta();
+    // Get the appropriate PDF blob key based on type
+    const blobKey = type === 'preview' ? 'active/preview.pdf' : 'active/signed.pdf';
 
-    // Get the appropriate PDF path based on type
-    // For preview: if document is signed, show the signed version, otherwise show preview
-    const pdfPath =
-      type === 'preview'
-        ? meta.status === 'signed' && meta.signedPdfPath
-          ? meta.signedPdfPath
-          : meta.previewPdfPath
-        : meta.signedPdfPath;
-
-    if (!pdfPath) {
+    // Get blob URL
+    let blobUrl: string;
+    try {
+      const blob = await head(blobKey);
+      blobUrl = blob.url;
+    } catch {
       const message =
         type === 'preview'
           ? 'Preview PDF not available. Please upload and convert a document first.'
           : 'Signed PDF not available. Please sign the document first.';
       return NextResponse.json({ error: message }, { status: 404 });
-    }
-
-    // Get blob URL for the PDF
-    const blobKey =
-      type === 'preview'
-        ? meta.status === 'signed'
-          ? 'active/signed.pdf'
-          : 'active/preview.pdf'
-        : 'active/signed.pdf';
-
-    const blobUrl = await getBlobUrl(blobKey);
-
-    if (!blobUrl) {
-      return NextResponse.json(
-        { error: `PDF file not found in storage` },
-        { status: 500 }
-      );
     }
 
     // Fetch the blob content
