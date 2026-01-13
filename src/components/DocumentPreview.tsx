@@ -46,7 +46,7 @@ export function DocumentPreview({
   onDocumentClick,
   onSignatureUpdate,
   retryAttempt = 0,
-  maxRetries = 5,
+  maxRetries = 10,
 }: DocumentPreviewProps) {
   // PDF page dimensions for overlay rendering
   const [pageWidth, setPageWidth] = useState<number>(0);

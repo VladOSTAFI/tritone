@@ -88,7 +88,7 @@ export function usePdfPreview({
   const currentBlobUrlRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const maxRetries = 5;
+  const maxRetries = 10;
 
   // Fetch PDF as blob when document is converted or signed
   useEffect(() => {
