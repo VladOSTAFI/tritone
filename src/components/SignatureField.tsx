@@ -62,12 +62,13 @@ export function SignatureField({
         top: `${(field.yN - field.hN / 2) * pageHeight}px`,
         width: `${field.wN * pageWidth}px`,
         height: `${field.hN * pageHeight}px`,
-        border: '2px dashed #3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        border: '3px dashed #3B82F6',
+        backgroundColor: 'rgba(59, 130, 246, 0.12)',
         pointerEvents: 'auto',
-        borderRadius: '4px',
+        borderRadius: '6px',
         zIndex: 10,
         cursor: isDragging ? 'grabbing' : 'grab',
+        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2), 0 2px 4px -1px rgba(59, 130, 246, 0.1)',
       }}
     >
       {/* Resize handles */}
@@ -77,12 +78,13 @@ export function SignatureField({
           onMouseDown={(e) => onResizeStart(e, handle)}
           style={{
             position: 'absolute',
-            width: '12px',
-            height: '12px',
+            width: '14px',
+            height: '14px',
             backgroundColor: '#3B82F6',
-            border: '2px solid white',
+            border: '2.5px solid white',
             borderRadius: '50%',
             cursor: getHandleCursor(handle),
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
             ...getHandlePosition(handle),
           }}
         />

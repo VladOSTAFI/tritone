@@ -291,19 +291,19 @@ export function DocumentPreview({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* PDF Preview Container */}
       <div
-        className={`h-96 border-2 md:h-[600px] ${
+        className={`h-96 md:h-[600px] flex items-center justify-center overflow-auto rounded-xl shadow-inner transition-all ${
           pdfBlobUrl
-            ? 'border-solid border-gray-300'
-            : 'border-dashed border-gray-300'
-        } flex items-center justify-center overflow-auto rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 transition`}
+            ? 'border-2 border-gray-300 bg-gray-50'
+            : 'border-2 border-dashed border-gray-300 bg-gradient-to-br from-gray-50 to-gray-100'
+        }`}
       >
         {isPdfLoading ? (
           <div className="text-center">
-            <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-            <p className="text-gray-600">Loading PDF...</p>
+            <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600"></div>
+            <p className="font-medium text-gray-700">Loading PDF...</p>
             {retryAttempt > 0 && (
               <p className="mt-2 text-sm text-blue-600">
                 Retrying... (Attempt {retryAttempt} of {maxRetries})
@@ -311,9 +311,14 @@ export function DocumentPreview({
             )}
           </div>
         ) : pdfError ? (
-          <div className="p-4 text-center">
-            <p className="mb-2 text-red-600">Failed to load PDF</p>
-            <p className="text-sm text-gray-500">{pdfError}</p>
+          <div className="max-w-md p-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="mb-2 font-semibold text-red-600">Failed to load PDF</p>
+            <p className="text-sm text-gray-600">{pdfError}</p>
           </div>
         ) : pdfBlobUrl ? (
           <div
@@ -328,8 +333,8 @@ export function DocumentPreview({
               onLoadError={(error) => onLoadError(error)}
               loading={
                 <div className="text-center">
-                  <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-                  <p className="text-gray-600">Rendering PDF...</p>
+                  <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600"></div>
+                  <p className="font-medium text-gray-700">Rendering PDF...</p>
                 </div>
               }
             >
@@ -337,7 +342,7 @@ export function DocumentPreview({
                 pageNumber={pageNumber}
                 renderTextLayer={true}
                 renderAnnotationLayer={true}
-                className="shadow-lg"
+                className="shadow-xl"
                 onLoadSuccess={handlePageLoadSuccess}
               />
             </Document>
@@ -357,7 +362,10 @@ export function DocumentPreview({
           </div>
         ) : (
           <div className="text-center">
-            <p className="text-gray-500">Upload a document to preview</p>
+            <svg className="mx-auto mb-3 h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            <p className="font-medium text-gray-500">Upload a document to preview</p>
           </div>
         )}
       </div>
@@ -368,11 +376,11 @@ export function DocumentPreview({
           <button
             onClick={() => onPageNumberChange(Math.max(1, pageNumber - 1))}
             disabled={pageNumber <= 1}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
           >
             Previous
           </button>
-          <span className="text-sm text-gray-600">
+          <span className="min-w-[120px] text-center text-sm font-medium text-gray-700">
             Page {pageNumber} of {numPages}
           </span>
           <button
@@ -380,7 +388,7 @@ export function DocumentPreview({
               onPageNumberChange(Math.min(numPages, pageNumber + 1))
             }
             disabled={pageNumber >= numPages}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
           >
             Next
           </button>

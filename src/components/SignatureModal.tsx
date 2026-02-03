@@ -90,36 +90,40 @@ export function SignatureModal({
     }
   };
 
-  const handleCloseClick = () => {
-    // Prevent closing if canvas is not empty
-    if (!isCanvasEmpty()) {
-      return;
-    }
-    onClose();
-  };
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={handleOverlayClick}
     >
-      <div className="mx-4 w-full max-w-4xl rounded-lg bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-xl font-semibold">{title}</h3>
+      <div className="mx-4 w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl md:p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <h3 className="text-2xl font-semibold text-gray-900">{title}</h3>
           <button
             onClick={onClose}
-            className="text-2xl leading-none text-gray-500 hover:text-gray-700"
+            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-gray-300 focus:outline-none"
             aria-label="Close modal"
           >
-            &times;
+            <svg
+              className="h-6 w-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Signature Canvas */}
           <div
             ref={containerRef}
-            className="rounded-md border-2 border-gray-300"
+            className="overflow-hidden rounded-lg border-2 border-gray-300 shadow-inner"
           >
             <SignatureCanvas
               ref={signatureCanvasRef}
@@ -134,24 +138,37 @@ export function SignatureModal({
 
           {/* Error Message */}
           {errorMessage && (
-            <div className="rounded bg-red-50 p-2 text-sm text-red-600">
-              {errorMessage}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div className="flex items-start gap-2">
+                <svg
+                  className="mt-0.5 h-4 w-4 flex-shrink-0"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>{errorMessage}</span>
+              </div>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={handleClear}
               disabled={isSaving}
-              className="flex-1 rounded-md bg-gray-200 px-4 py-2 font-medium text-gray-800 transition hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-lg bg-gray-100 px-5 py-3 font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-200 hover:shadow-md focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               Clear
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex-1 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving
                 ? 'Placing...'

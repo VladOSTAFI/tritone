@@ -64,13 +64,14 @@ export function SignatureImageOverlay({
         top: `${(position.yN - position.hN / 2) * pageHeight}px`,
         width: `${position.wN * pageWidth}px`,
         height: `${position.hN * pageHeight}px`,
-        border: '2px solid rgba(59, 130, 246, 0.6)',
-        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+        border: '3px solid rgba(59, 130, 246, 0.8)',
+        backgroundColor: 'rgba(59, 130, 246, 0.08)',
         pointerEvents: 'auto',
-        borderRadius: '4px',
+        borderRadius: '6px',
         zIndex: 10,
         cursor: isDragging ? 'grabbing' : 'grab',
         overflow: 'hidden',
+        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2), 0 2px 4px -1px rgba(59, 130, 246, 0.1)',
       }}
     >
       {/* Signature Image */}
@@ -93,12 +94,13 @@ export function SignatureImageOverlay({
           onMouseDown={(e) => onResizeStart(e, handle)}
           style={{
             position: 'absolute',
-            width: '12px',
-            height: '12px',
+            width: '14px',
+            height: '14px',
             backgroundColor: '#3B82F6',
-            border: '2px solid white',
+            border: '2.5px solid white',
             borderRadius: '50%',
             cursor: getHandleCursor(handle),
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
             ...getHandlePosition(handle),
           }}
         />
