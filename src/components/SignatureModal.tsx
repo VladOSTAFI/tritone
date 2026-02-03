@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 
 interface SignatureModalProps {
@@ -19,10 +19,35 @@ export function SignatureModal({
   title = 'Draw Your Signature',
 }: SignatureModalProps) {
   const signatureCanvasRef = useRef<SignatureCanvas | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [canvasWidth, setCanvasWidth] = useState<number>(800);
+
+  // Update canvas width when container size changes
+  useEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+
+    const updateCanvasWidth = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        setCanvasWidth(width);
+      }
+    };
+
+    // Set initial width
+    updateCanvasWidth();
+
+    // Update on window resize
+    window.addEventListener('resize', updateCanvasWidth);
+    return () => window.removeEventListener('resize', updateCanvasWidth);
+  }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const isCanvasEmpty = () => {
+    return signatureCanvasRef.current?.isEmpty() ?? true;
+  };
 
   const handleClear = () => {
     signatureCanvasRef.current?.clear();
@@ -57,8 +82,20 @@ export function SignatureModal({
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
+      // Prevent closing if canvas is not empty
+      if (!isCanvasEmpty()) {
+        return;
+      }
       onClose();
     }
+  };
+
+  const handleCloseClick = () => {
+    // Prevent closing if canvas is not empty
+    if (!isCanvasEmpty()) {
+      return;
+    }
+    onClose();
   };
 
   return (
@@ -66,7 +103,7 @@ export function SignatureModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={handleOverlayClick}
     >
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="mx-4 w-full max-w-4xl rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-xl font-semibold">{title}</h3>
           <button
@@ -80,13 +117,16 @@ export function SignatureModal({
 
         <div className="space-y-4">
           {/* Signature Canvas */}
-          <div className="rounded-md border-2 border-gray-300">
+          <div
+            ref={containerRef}
+            className="rounded-md border-2 border-gray-300"
+          >
             <SignatureCanvas
               ref={signatureCanvasRef}
               canvasProps={{
-                width: 400,
-                height: 200,
-                className: 'signature-canvas',
+                width: canvasWidth,
+                height: 500,
+                className: 'signature-canvas w-full',
               }}
               backgroundColor="rgb(255, 255, 255)"
             />
